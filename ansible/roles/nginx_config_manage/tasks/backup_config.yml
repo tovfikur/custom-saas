@@ -1,0 +1,67 @@
+---
+# Create backup of current nginx configuration
+- name: Generate backup timestamp
+  set_fact:
+    backup_timestamp: "{{ ansible_date_time.strftime('%Y%m%d_%H%M%S') }}"
+
+- name: Create backup directory
+  file:
+    path: "/srv/backups/nginx/{{ backup_timestamp }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Backup nginx configuration files
+  copy:
+    src: /etc/nginx/
+    dest: "/srv/backups/nginx/{{ backup_timestamp }}/"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+  register: backup_created
+
+- name: Capture nginx status
+  command: systemctl status nginx
+  register: nginx_status
+  failed_when: false
+  changed_when: false
+
+- name: Save nginx status to backup
+  copy:
+    content: "{{ nginx_status.stdout }}"
+    dest: "/srv/backups/nginx/{{ backup_timestamp }}/nginx_status.txt"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Test current nginx configuration
+  command: nginx -t
+  register: current_config_test
+  failed_when: false
+  changed_when: false
+
+- name: Save current config test results
+  copy:
+    content: |
+      Exit code: {{ current_config_test.rc }}
+      STDOUT: {{ current_config_test.stdout }}
+      STDERR: {{ current_config_test.stderr }}
+    dest: "/srv/backups/nginx/{{ backup_timestamp }}/nginx_test_current.txt"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Set backup facts
+  set_fact:
+    nginx_backup_path: "/srv/backups/nginx/{{ backup_timestamp }}"
+    nginx_backup_created: "{{ backup_created is succeeded }}"
+
+- name: Display backup information
+  debug:
+    msg: |
+      Nginx Configuration Backup:
+      Path: {{ nginx_backup_path }}
+      Status: {{ 'SUCCESS' if nginx_backup_created else 'FAILED' }}
+      Timestamp: {{ backup_timestamp }}

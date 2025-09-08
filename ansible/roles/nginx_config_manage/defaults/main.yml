@@ -1,0 +1,28 @@
+---
+# Default variables for nginx_config_manage role
+
+# Configuration settings
+config_name: "default"
+config_version: "{{ ansible_date_time.epoch }}"
+config_content: ""
+
+# Behavior flags
+backup_config: true
+apply_config: false
+fail_on_validation_error: true
+fail_on_health_check: false
+perform_health_check: true
+check_ssl: false
+
+# Rollback settings
+rollback_version: ""
+
+# Task identification
+task_id: "ansible_{{ ansible_date_time.epoch }}"
+
+# Health check settings
+health_check_timeout: 30
+acceptable_error_threshold: 10
+
+# Backup retention
+backup_retention_days: 30

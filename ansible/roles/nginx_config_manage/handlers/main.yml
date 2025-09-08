@@ -1,0 +1,26 @@
+---
+# Handlers for nginx_config_manage role
+
+- name: restart nginx
+  systemd:
+    name: nginx
+    state: restarted
+  become: true
+
+- name: reload nginx
+  systemd:
+    name: nginx
+    state: reloaded
+  become: true
+
+- name: stop nginx
+  systemd:
+    name: nginx
+    state: stopped
+  become: true
+
+- name: start nginx
+  systemd:
+    name: nginx
+    state: started
+  become: true

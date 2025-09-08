@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Custom scrollbar */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #1f2937;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1f2937;
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+
+  /* Code editor styles */
+  .code-editor {
+    font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Ubuntu Mono', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Status indicators */
+  .status-indicator {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-indicator.success {
+    @apply bg-success-50 text-success-600;
+  }
+
+  .status-indicator.warning {
+    @apply bg-warning-50 text-warning-600;
+  }
+
+  .status-indicator.danger {
+    @apply bg-danger-50 text-danger-600;
+  }
+
+  .status-indicator.info {
+    @apply bg-primary-50 text-primary-600;
+  }
+
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center px-4 py-2 border font-medium rounded-md shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+  }
+
+  .btn-primary {
+    @apply btn border-transparent bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-primary-500;
+  }
+
+  .btn-danger {
+    @apply btn border-transparent bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
+  }
+
+  .btn-warning {
+    @apply btn border-transparent bg-warning-600 text-white hover:bg-warning-700 focus:ring-warning-500;
+  }
+
+  .btn-success {
+    @apply btn border-transparent bg-success-600 text-white hover:bg-success-700 focus:ring-success-500;
+  }
+
+  /* Input fields */
+  .form-input {
+    @apply block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm;
+  }
+
+  .form-textarea {
+    @apply form-input;
+  }
+
+  .form-select {
+    @apply form-input;
+  }
+
+  /* Card components */
+  .card {
+    @apply bg-white shadow rounded-lg;
+  }
+
+  .card-header {
+    @apply px-4 py-5 border-b border-gray-200 sm:px-6;
+  }
+
+  .card-body {
+    @apply px-4 py-5 sm:p-6;
+  }
+
+  .card-footer {
+    @apply px-4 py-4 border-t border-gray-200 sm:px-6;
+  }
+
+  /* Loading animations */
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-spin-slow {
+    animation: spin 3s linear infinite;
+  }
+
+  /* Dark theme adjustments */
+  .dark .card {
+    @apply bg-gray-800 border border-gray-700;
+  }
+
+  .dark .card-header {
+    @apply border-gray-700;
+  }
+
+  .dark .card-footer {
+    @apply border-gray-700;
+  }
+
+  .dark .form-input {
+    @apply bg-gray-700 border-gray-600 text-white placeholder-gray-400;
+  }
+
+  .dark .btn-secondary {
+    @apply border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600;
+  }
+}

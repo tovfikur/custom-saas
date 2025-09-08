@@ -1,0 +1,55 @@
+---
+# Playbook to rollback nginx configuration
+- name: Rollback Nginx Configuration
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+  
+  vars:
+    # These variables should be passed from the API call
+    config_name: "{{ config_name_param | mandatory }}"
+    rollback_version: "{{ rollback_version_param | mandatory }}"
+    task_id: "{{ task_id_param | default('unknown') }}"
+    
+  pre_tasks:
+    - name: Validate rollback parameters
+      assert:
+        that:
+          - config_name is defined
+          - rollback_version is defined
+        fail_msg: "Rollback parameters are missing"
+    
+    - name: Display rollback details
+      debug:
+        msg: |
+          Nginx Configuration Rollback:
+          Host: {{ inventory_hostname }}
+          Config Name: {{ config_name }}
+          Rollback Version: {{ rollback_version }}
+          Task ID: {{ task_id }}
+  
+  roles:
+    - role: nginx_config_manage
+      vars:
+        backup_config: true
+        apply_config: false
+        rollback_version: "{{ rollback_version }}"
+        perform_health_check: true
+        fail_on_health_check: false
+  
+  post_tasks:
+    - name: Set rollback results
+      set_fact:
+        rollback_results:
+          task_id: "{{ task_id }}"
+          host: "{{ inventory_hostname }}"
+          success: "{{ nginx_rollback_successful | default(false) }}"
+          rollback_version: "{{ rollback_version }}"
+          backup_created: "{{ nginx_backup_created | default(false) }}"
+          backup_path: "{{ nginx_backup_path | default('') }}"
+          health_status: "{{ nginx_health_check_results.overall_status | default('unknown') }}"
+          timestamp: "{{ nginx_rollback_timestamp | default(ansible_date_time.iso8601) }}"
+    
+    - name: Display rollback results
+      debug:
+        var: rollback_results

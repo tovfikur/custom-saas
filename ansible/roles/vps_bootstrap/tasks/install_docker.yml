@@ -1,0 +1,83 @@
+---
+# Install Docker on the VPS
+- name: Check if Docker is already installed
+  command: docker --version
+  register: docker_check
+  failed_when: false
+  changed_when: false
+
+- name: Set Docker installation needed flag
+  set_fact:
+    docker_installation_needed: "{{ docker_check.rc != 0 }}"
+
+- name: Install Docker prerequisites
+  package:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+  become: true
+  when: docker_installation_needed
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+  become: true
+  when: docker_installation_needed and ansible_os_family == "Debian"
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    update_cache: true
+  become: true
+  when: docker_installation_needed and ansible_os_family == "Debian"
+
+- name: Install Docker CE
+  package:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present
+    update_cache: true
+  become: true
+  when: docker_installation_needed
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+
+- name: Add user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+  become: true
+  when: ansible_user != "root"
+
+- name: Install Docker Compose
+  pip:
+    name: docker-compose
+    state: present
+  become: true
+
+- name: Verify Docker installation
+  command: docker run hello-world
+  register: docker_test
+  changed_when: false
+  become: true
+
+- name: Set Docker installation facts
+  set_fact:
+    docker_installed: true
+    docker_version: "{{ docker_check.stdout if not docker_installation_needed else 'newly_installed' }}"
+    docker_compose_available: true

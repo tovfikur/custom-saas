@@ -1,0 +1,71 @@
+---
+# Playbook to apply nginx configuration safely
+- name: Apply Nginx Configuration with Safety Checks
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+  
+  vars:
+    # These variables should be passed from the API call
+    config_name: "{{ config_name_param | mandatory }}"
+    config_version: "{{ config_version_param | default(ansible_date_time.epoch) }}"
+    config_content: "{{ config_content_param | mandatory }}"
+    task_id: "{{ task_id_param | default('unknown') }}"
+    watch_window_seconds: "{{ watch_window_param | default(120) }}"
+    dry_run: "{{ dry_run_param | default(false) }}"
+    
+  pre_tasks:
+    - name: Validate required variables
+      assert:
+        that:
+          - config_name is defined
+          - config_content is defined
+          - config_content | length > 0
+        fail_msg: "Required configuration variables are missing"
+    
+    - name: Display operation details
+      debug:
+        msg: |
+          Nginx Configuration Operation:
+          Host: {{ inventory_hostname }}
+          Config Name: {{ config_name }}
+          Version: {{ config_version }}
+          Task ID: {{ task_id }}
+          Dry Run: {{ dry_run }}
+          Watch Window: {{ watch_window_seconds }}s
+  
+  roles:
+    - role: nginx_config_manage
+      vars:
+        backup_config: true
+        apply_config: "{{ not (dry_run | bool) }}"
+        perform_health_check: "{{ not (dry_run | bool) }}"
+        fail_on_validation_error: true
+        fail_on_health_check: false  # We handle this in post_tasks
+  
+  post_tasks:
+    - name: Set operation results
+      set_fact:
+        operation_results:
+          task_id: "{{ task_id }}"
+          host: "{{ inventory_hostname }}"
+          success: "{{ nginx_validation_passed | default(false) and (dry_run | bool or nginx_config_applied | default(false)) }}"
+          dry_run: "{{ dry_run | bool }}"
+          validation_passed: "{{ nginx_validation_passed | default(false) }}"
+          config_applied: "{{ nginx_config_applied | default(false) }}"
+          backup_created: "{{ nginx_backup_created | default(false) }}"
+          backup_path: "{{ nginx_backup_path | default('') }}"
+          health_status: "{{ nginx_health_check_results.overall_status | default('unknown') }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+    
+    - name: Display final results
+      debug:
+        var: operation_results
+    
+    - name: Schedule health monitoring (if applied and watch window > 0)
+      debug:
+        msg: "Health monitoring should be scheduled for {{ watch_window_seconds }} seconds"
+      when: 
+        - not (dry_run | bool)
+        - nginx_config_applied | default(false)
+        - watch_window_seconds | int > 0

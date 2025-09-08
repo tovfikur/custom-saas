@@ -1,0 +1,55 @@
+---
+# Rollback nginx configuration to previous version
+- name: Set rollback paths
+  set_fact:
+    rollback_config_path: "/etc/nginx/managed.d/{{ config_name }}_{{ rollback_version }}.conf"
+    enabled_config_path: "/etc/nginx/sites-enabled/{{ config_name }}.conf"
+
+- name: Check if rollback version exists
+  stat:
+    path: "{{ rollback_config_path }}"
+  register: rollback_config_exists
+
+- name: Fail if rollback version not found
+  fail:
+    msg: "Rollback version {{ rollback_version }} not found at {{ rollback_config_path }}"
+  when: not rollback_config_exists.stat.exists
+
+- name: Create backup before rollback
+  include_tasks: backup_config.yml
+  vars:
+    backup_reason: "pre_rollback_to_{{ rollback_version }}"
+
+- name: Update symlink to rollback version
+  file:
+    src: "{{ rollback_config_path }}"
+    dest: "{{ enabled_config_path }}"
+    state: link
+    force: true
+  register: rollback_symlink_created
+
+- name: Test nginx configuration after rollback
+  command: nginx -t
+  register: rollback_nginx_test
+  failed_when: rollback_nginx_test.rc != 0
+
+- name: Reload nginx after rollback
+  systemd:
+    name: nginx
+    state: reloaded
+  register: rollback_nginx_reloaded
+
+- name: Set rollback facts
+  set_fact:
+    nginx_rollback_successful: true
+    nginx_rollback_version: "{{ rollback_version }}"
+    nginx_rollback_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+- name: Display rollback results
+  debug:
+    msg: |
+      Nginx Configuration Rollback:
+      Rolled back to version: {{ nginx_rollback_version }}
+      Config path: {{ rollback_config_path }}
+      Rollback successful: {{ nginx_rollback_successful }}
+      Timestamp: {{ nginx_rollback_timestamp }}

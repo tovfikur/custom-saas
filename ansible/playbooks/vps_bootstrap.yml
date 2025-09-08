@@ -1,0 +1,78 @@
+---
+# Playbook to bootstrap a VPS for SaaS orchestration
+- name: Bootstrap VPS for SaaS Orchestration
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+  
+  vars:
+    # Bootstrap configuration
+    update_system: true
+    install_docker: true
+    install_nginx: true
+    setup_monitoring: true
+    configure_security: true
+    task_id: "{{ task_id_param | default('unknown') }}"
+    
+  pre_tasks:
+    - name: Display bootstrap information
+      debug:
+        msg: |
+          VPS Bootstrap Operation:
+          Host: {{ inventory_hostname }}
+          IP: {{ ansible_default_ipv4.address }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Task ID: {{ task_id }}
+    
+    - name: Check connectivity
+      ping:
+      
+    - name: Gather additional system facts
+      setup:
+        gather_subset: 
+          - hardware
+          - network
+          - virtual
+  
+  roles:
+    - role: vps_bootstrap
+  
+  post_tasks:
+    - name: Compile bootstrap results
+      set_fact:
+        bootstrap_results:
+          task_id: "{{ task_id }}"
+          host: "{{ inventory_hostname }}"
+          ip_address: "{{ ansible_default_ipv4.address }}"
+          os_info:
+            distribution: "{{ ansible_distribution }}"
+            version: "{{ ansible_distribution_version }}"
+            kernel: "{{ ansible_kernel }}"
+            architecture: "{{ ansible_architecture }}"
+          docker:
+            installed: "{{ docker_installed | default(false) }}"
+            version: "{{ docker_version | default('unknown') }}"
+          nginx:
+            installed: "{{ nginx_installed | default(false) }}"
+            version: "{{ nginx_version | default('unknown') }}"
+            config_valid: "{{ nginx_config_valid | default(false) }}"
+          system:
+            memory_mb: "{{ ansible_memtotal_mb }}"
+            cpu_cores: "{{ ansible_processor_cores }}"
+            disk_space: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | first | default(0) }}"
+          bootstrap_success: "{{ docker_installed | default(false) and nginx_installed | default(false) }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+    
+    - name: Display bootstrap results
+      debug:
+        var: bootstrap_results
+    
+    - name: Verify services are running
+      service_facts:
+    
+    - name: Final service status check
+      debug:
+        msg: |
+          Service Status:
+          Docker: {{ ansible_facts.services['docker.service'].state if 'docker.service' in ansible_facts.services else 'not found' }}
+          Nginx: {{ ansible_facts.services['nginx.service'].state if 'nginx.service' in ansible_facts.services else 'not found' }}

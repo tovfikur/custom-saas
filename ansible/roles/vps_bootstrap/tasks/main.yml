@@ -1,0 +1,34 @@
+---
+# Main tasks for VPS bootstrap
+- name: Gather system information
+  include_tasks: system_info.yml
+  tags: [bootstrap, info]
+
+- name: Update system packages
+  include_tasks: system_update.yml
+  when: update_system | default(true)
+  tags: [bootstrap, update]
+
+- name: Install Docker
+  include_tasks: install_docker.yml
+  when: install_docker | default(true)
+  tags: [bootstrap, docker]
+
+- name: Install and configure Nginx
+  include_tasks: install_nginx.yml
+  when: install_nginx | default(true)
+  tags: [bootstrap, nginx]
+
+- name: Set up monitoring
+  include_tasks: setup_monitoring.yml
+  when: setup_monitoring | default(true)
+  tags: [bootstrap, monitoring]
+
+- name: Configure security settings
+  include_tasks: security_setup.yml
+  when: configure_security | default(true)
+  tags: [bootstrap, security]
+
+- name: Create necessary directories
+  include_tasks: create_directories.yml
+  tags: [bootstrap, directories]

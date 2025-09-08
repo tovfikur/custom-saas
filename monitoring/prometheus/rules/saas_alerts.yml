@@ -1,0 +1,150 @@
+groups:
+  - name: saas_orchestrator_alerts
+    rules:
+      # VPS Host Alerts
+      - alert: VPSHostDown
+        expr: up{job="node-exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VPS Host {{ $labels.instance }} is down"
+          description: "VPS host {{ $labels.instance }} has been down for more than 5 minutes."
+
+      - alert: VPSHighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on VPS {{ $labels.instance }}"
+          description: "CPU usage on VPS {{ $labels.instance }} is above 80% for 10 minutes."
+
+      - alert: VPSHighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on VPS {{ $labels.instance }}"
+          description: "Memory usage on VPS {{ $labels.instance }} is above 85% for 10 minutes."
+
+      - alert: VPSLowDiskSpace
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on VPS {{ $labels.instance }}"
+          description: "Disk usage on VPS {{ $labels.instance }} is above 85%."
+
+  - name: nginx_alerts
+    rules:
+      # Nginx Alerts
+      - alert: NginxDown
+        expr: up{job="nginx-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx is down on {{ $labels.instance }}"
+          description: "Nginx service on {{ $labels.instance }} has been down for more than 2 minutes."
+
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Nginx error rate on {{ $labels.instance }}"
+          description: "Nginx error rate on {{ $labels.instance }} is above 5% for 5 minutes."
+
+      - alert: NginxConfigReloadFailed
+        expr: increase(nginx_config_reload_errors_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx config reload failed on {{ $labels.instance }}"
+          description: "Nginx configuration reload failed on {{ $labels.instance }}."
+
+  - name: saas_api_alerts
+    rules:
+      # SaaS API Alerts
+      - alert: SaaSAPIDown
+        expr: up{job="saas-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SaaS API is down"
+          description: "The SaaS Orchestrator API has been down for more than 2 minutes."
+
+      - alert: SaaSAPIHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate"
+          description: "SaaS API error rate is above 5% for 5 minutes."
+
+      - alert: NginxConfigOperationFailed
+        expr: increase(nginx_config_operations_total{status="failed"}[10m]) > 3
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple nginx config operations failed"
+          description: "More than 3 nginx configuration operations have failed in the last 10 minutes."
+
+      - alert: AutoRollbackTriggered
+        expr: increase(nginx_config_auto_rollbacks_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx config auto-rollback triggered"
+          description: "An automatic rollback was triggered for nginx configuration on {{ $labels.instance }}."
+
+  - name: odoo_alerts
+    rules:
+      # Odoo Instance Alerts
+      - alert: OdooInstanceDown
+        expr: up{job="odoo-instances"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Odoo instance {{ $labels.instance }} is down"
+          description: "Odoo instance {{ $labels.instance }} has been unreachable for more than 5 minutes."
+
+      - alert: OdooInstanceHighResponseTime
+        expr: http_request_duration_seconds{job="odoo-instances"} > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time for Odoo instance {{ $labels.instance }}"
+          description: "Odoo instance {{ $labels.instance }} has high response times for 10 minutes."
+
+  - name: security_alerts
+    rules:
+      # Security Alerts
+      - alert: UnauthorizedAccessAttempts
+        expr: increase(auth_failures_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of authentication failures"
+          description: "More than 10 authentication failures detected in the last 5 minutes."
+
+      - alert: SuspiciousNginxConfigChanges
+        expr: increase(nginx_config_operations_total{actor="unknown"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx configuration changed by unknown actor"
+          description: "Nginx configuration was modified by an unknown or unauthorized actor."

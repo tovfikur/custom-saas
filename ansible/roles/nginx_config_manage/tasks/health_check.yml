@@ -1,0 +1,90 @@
+---
+# Perform health checks after configuration changes
+- name: Check nginx service status
+  systemd:
+    name: nginx
+  register: nginx_service_status
+
+- name: Test nginx processes
+  command: pgrep nginx
+  register: nginx_processes
+  failed_when: false
+  changed_when: false
+
+- name: Check nginx error logs for recent errors
+  shell: journalctl -u nginx --since="2 minutes ago" | grep -i error | wc -l
+  register: nginx_error_count
+  changed_when: false
+  failed_when: false
+
+- name: Test HTTP response on port 80
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}/"
+    method: GET
+    status_code: [200, 301, 302, 403, 404]  # Accept various valid HTTP responses
+    timeout: 10
+  register: http_test
+  failed_when: false
+  changed_when: false
+
+- name: Test HTTPS response on port 443 (if SSL enabled)
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}/"
+    method: GET
+    status_code: [200, 301, 302, 403, 404]
+    timeout: 10
+    validate_certs: false
+  register: https_test
+  failed_when: false
+  changed_when: false
+  when: check_ssl | default(false)
+
+- name: Check nginx configuration syntax
+  command: nginx -t
+  register: nginx_syntax_check
+  failed_when: false
+  changed_when: false
+
+- name: Evaluate overall health status
+  set_fact:
+    nginx_health_status: |
+      {%- set health_score = 0 -%}
+      {%- if nginx_service_status.status.ActiveState == "active" -%}
+        {%- set health_score = health_score + 20 -%}
+      {%- endif -%}
+      {%- if nginx_processes.rc == 0 and nginx_processes.stdout_lines | length > 0 -%}
+        {%- set health_score = health_score + 20 -%}
+      {%- endif -%}
+      {%- if nginx_error_count.stdout | int < 10 -%}
+        {%- set health_score = health_score + 20 -%}
+      {%- endif -%}
+      {%- if http_test.status is defined and http_test.status in [200, 301, 302, 403, 404] -%}
+        {%- set health_score = health_score + 20 -%}
+      {%- endif -%}
+      {%- if nginx_syntax_check.rc == 0 -%}
+        {%- set health_score = health_score + 20 -%}
+      {%- endif -%}
+      {{- 'healthy' if health_score >= 80 else 'degraded' if health_score >= 60 else 'unhealthy' -}}
+
+- name: Set detailed health facts
+  set_fact:
+    nginx_health_check_results:
+      overall_status: "{{ nginx_health_status }}"
+      service_active: "{{ nginx_service_status.status.ActiveState == 'active' }}"
+      processes_running: "{{ nginx_processes.rc == 0 and nginx_processes.stdout_lines | length > 0 }}"
+      error_count: "{{ nginx_error_count.stdout | int }}"
+      http_responsive: "{{ http_test.status is defined and http_test.status in [200, 301, 302, 403, 404] }}"
+      https_responsive: "{{ https_test.status is defined and https_test.status in [200, 301, 302, 403, 404] if check_ssl | default(false) else 'not_checked' }}"
+      config_valid: "{{ nginx_syntax_check.rc == 0 }}"
+      check_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+- name: Display health check results
+  debug:
+    var: nginx_health_check_results
+
+- name: Fail if health check indicates critical issues
+  fail:
+    msg: "Critical health check failure: {{ nginx_health_status }}"
+  when: 
+    - nginx_health_status == "unhealthy"
+    - fail_on_health_check | default(false)

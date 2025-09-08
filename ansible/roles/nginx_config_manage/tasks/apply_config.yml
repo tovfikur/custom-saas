@@ -1,0 +1,97 @@
+---
+# Apply nginx configuration with safety checks
+- name: Ensure validation has passed
+  assert:
+    that:
+      - nginx_validation_passed | default(false)
+    fail_msg: "Cannot apply configuration - validation has not passed"
+
+- name: Set configuration file paths
+  set_fact:
+    draft_config_path: "/etc/nginx/managed.d/drafts/{{ config_name }}_{{ config_version | default('latest') }}.conf"
+    active_config_path: "/etc/nginx/managed.d/{{ config_name }}_{{ config_version | default('latest') }}.conf"
+    enabled_config_path: "/etc/nginx/sites-enabled/{{ config_name }}.conf"
+
+- name: Write configuration to drafts directory
+  copy:
+    content: "{{ config_content }}"
+    dest: "{{ draft_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  register: draft_written
+
+- name: Test nginx with draft configuration included
+  block:
+    - name: Temporarily link draft config
+      file:
+        src: "{{ draft_config_path }}"
+        dest: "{{ enabled_config_path }}.test"
+        state: link
+        force: true
+
+    - name: Test nginx configuration with draft included
+      command: nginx -t
+      register: nginx_test_with_draft
+      failed_when: nginx_test_with_draft.rc != 0
+
+    - name: Remove test link
+      file:
+        path: "{{ enabled_config_path }}.test"
+        state: absent
+
+  rescue:
+    - name: Remove test link on failure
+      file:
+        path: "{{ enabled_config_path }}.test"
+        state: absent
+
+    - name: Clean up draft file on test failure
+      file:
+        path: "{{ draft_config_path }}"
+        state: absent
+
+    - name: Fail with nginx test error
+      fail:
+        msg: "Nginx configuration test failed: {{ nginx_test_with_draft.stderr }}"
+
+- name: Move draft to active directory
+  command: mv "{{ draft_config_path }}" "{{ active_config_path }}"
+  register: config_moved
+
+- name: Create symlink in sites-enabled
+  file:
+    src: "{{ active_config_path }}"
+    dest: "{{ enabled_config_path }}"
+    state: link
+    force: true
+  register: symlink_created
+
+- name: Final nginx configuration test
+  command: nginx -t
+  register: final_nginx_test
+  failed_when: final_nginx_test.rc != 0
+
+- name: Reload nginx service
+  systemd:
+    name: nginx
+    state: reloaded
+  register: nginx_reloaded
+
+- name: Set application facts
+  set_fact:
+    nginx_config_applied: true
+    nginx_config_active_path: "{{ active_config_path }}"
+    nginx_reload_successful: "{{ nginx_reloaded is succeeded }}"
+    nginx_apply_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+- name: Display apply results
+  debug:
+    msg: |
+      Nginx Configuration Applied:
+      Config Name: {{ config_name }}
+      Version: {{ config_version | default('latest') }}
+      Active Path: {{ nginx_config_active_path }}
+      Reload Status: {{ 'SUCCESS' if nginx_reload_successful else 'FAILED' }}
+      Applied At: {{ nginx_apply_timestamp }}

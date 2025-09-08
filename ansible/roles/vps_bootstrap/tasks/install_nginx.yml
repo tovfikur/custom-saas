@@ -1,0 +1,86 @@
+---
+# Install and configure Nginx
+- name: Check if Nginx is already installed
+  command: nginx -v
+  register: nginx_check
+  failed_when: false
+  changed_when: false
+
+- name: Set Nginx installation needed flag
+  set_fact:
+    nginx_installation_needed: "{{ nginx_check.rc != 0 }}"
+
+- name: Update package cache
+  package:
+    update_cache: true
+  become: true
+  when: nginx_installation_needed
+
+- name: Install Nginx
+  package:
+    name: nginx
+    state: present
+  become: true
+  when: nginx_installation_needed
+
+- name: Start and enable Nginx service
+  systemd:
+    name: nginx
+    state: started
+    enabled: true
+  become: true
+
+- name: Create backup of original nginx.conf
+  copy:
+    src: /etc/nginx/nginx.conf
+    dest: "/etc/nginx/nginx.conf.original.{{ ansible_date_time.strftime('%Y%m%d_%H%M%S') }}"
+    remote_src: true
+    backup: true
+  become: true
+  when: nginx_installation_needed
+
+- name: Create managed nginx directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  loop:
+    - /etc/nginx/managed.d
+    - /etc/nginx/managed.d/drafts
+    - /srv/backups/nginx
+
+- name: Configure nginx.conf to include managed configs
+  blockinfile:
+    path: /etc/nginx/nginx.conf
+    marker: "# {mark} SAAS ORCHESTRATOR MANAGED CONFIGS"
+    insertbefore: "include /etc/nginx/sites-enabled/*;"
+    block: |
+      # Include managed configurations
+      include /etc/nginx/managed.d/*.conf;
+  become: true
+  notify: reload nginx
+
+- name: Create default managed server block
+  template:
+    src: default_server.conf.j2
+    dest: /etc/nginx/managed.d/default.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: reload nginx
+
+- name: Test nginx configuration
+  command: nginx -t
+  register: nginx_test
+  become: true
+  changed_when: false
+
+- name: Set Nginx installation facts
+  set_fact:
+    nginx_installed: true
+    nginx_version: "{{ nginx_check.stderr if not nginx_installation_needed else 'newly_installed' }}"
+    nginx_config_valid: "{{ nginx_test.rc == 0 }}"

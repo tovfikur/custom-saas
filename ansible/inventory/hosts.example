@@ -1,0 +1,17 @@
+[vps_hosts]
+# Example VPS host entries
+# vps1 ansible_host=192.168.1.100 ansible_user=root ansible_ssh_private_key_file=/path/to/key
+# vps2 ansible_host=192.168.1.101 ansible_user=ubuntu ansible_ssh_pass=password
+
+[vps_hosts:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+[odoo_instances]
+# Odoo instances will be dynamically added here
+# Format: instance_name ansible_host=vps_ip odoo_port=8069 domain=example.com
+
+[monitoring]
+# Monitoring servers
+# prometheus ansible_host=monitoring.example.com
+# grafana ansible_host=monitoring.example.com

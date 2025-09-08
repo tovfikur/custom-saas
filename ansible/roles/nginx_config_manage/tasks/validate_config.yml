@@ -1,0 +1,47 @@
+---
+# Validate nginx configuration
+- name: Generate unique temp filename
+  set_fact:
+    temp_config_file: "/tmp/nginx_test_{{ ansible_date_time.epoch }}_{{ 999999 | random }}.conf"
+
+- name: Write candidate config to temporary file
+  copy:
+    content: "{{ config_content }}"
+    dest: "{{ temp_config_file }}"
+    owner: root
+    group: root
+    mode: '0644'
+  register: temp_config_created
+
+- name: Test nginx configuration syntax
+  command: nginx -t -c {{ temp_config_file }}
+  register: validation_result
+  failed_when: false
+  changed_when: false
+
+- name: Clean up temporary config file
+  file:
+    path: "{{ temp_config_file }}"
+    state: absent
+  when: temp_config_created is succeeded
+
+- name: Set validation facts
+  set_fact:
+    nginx_validation_passed: "{{ validation_result.rc == 0 }}"
+    nginx_validation_output: "{{ validation_result.stderr }}"
+    nginx_validation_task_id: "{{ task_id | default('unknown') }}"
+
+- name: Display validation results
+  debug:
+    msg: |
+      Nginx Configuration Validation Results:
+      Status: {{ 'PASSED' if nginx_validation_passed else 'FAILED' }}
+      Task ID: {{ nginx_validation_task_id }}
+      Output: {{ nginx_validation_output }}
+
+- name: Fail if validation failed
+  fail:
+    msg: "Nginx configuration validation failed: {{ nginx_validation_output }}"
+  when: 
+    - not nginx_validation_passed
+    - fail_on_validation_error | default(true)

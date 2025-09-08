@@ -1,0 +1,206 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: saas_orchestrator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - saas_network
+
+  # Redis for caching and task queues
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - saas_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/saas_orchestrator
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET_KEY: your-super-secure-jwt-secret-key-change-in-production
+      ENCRYPTION_KEY: u3Uc-qAi9K0HLyTwtUIISqVKBkedXPt9QJGrJdJ_KNE=
+      TIMEZONE: Asia/Dhaka
+      ADMIN_EMAIL: admin@domain.com
+      ADMIN_PASSWORD: admin
+      CELERY_BROKER_URL: redis://redis:6379
+      CELERY_RESULT_BACKEND: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - saas_network
+    restart: unless-stopped
+
+  # Celery Worker for background tasks
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.worker worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/saas_orchestrator
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET_KEY: your-super-secure-jwt-secret-key-change-in-production
+      ENCRYPTION_KEY: u3Uc-qAi9K0HLyTwtUIISqVKBkedXPt9QJGrJdJ_KNE=
+      TIMEZONE: Asia/Dhaka
+      ADMIN_EMAIL: admin@domain.com
+      ADMIN_PASSWORD: admin
+      CELERY_BROKER_URL: redis://redis:6379
+      CELERY_RESULT_BACKEND: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - saas_network
+    restart: unless-stopped
+
+  # Celery Beat for scheduled tasks
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.worker beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/saas_orchestrator
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET_KEY: your-super-secure-jwt-secret-key-change-in-production
+      ENCRYPTION_KEY: u3Uc-qAi9K0HLyTwtUIISqVKBkedXPt9QJGrJdJ_KNE=
+      TIMEZONE: Asia/Dhaka
+      ADMIN_EMAIL: admin@domain.com
+      ADMIN_PASSWORD: admin
+      CELERY_BROKER_URL: redis://redis:6379
+      CELERY_RESULT_BACKEND: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    networks:
+      - saas_network
+    restart: unless-stopped
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - saas_network
+    restart: unless-stopped
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    networks:
+      - saas_network
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      # Add your custom icons here
+      - ./monitoring/grafana/custom_icons/grafana_icon.1e0deb6b.svg:/usr/share/grafana/public/build/static/img/grafana_icon.1e0deb6b.svg
+      - ./monitoring/grafana/custom_icons/grafana_icon.svg:/usr/share/grafana/public/build/img/grafana_icon.svg
+      - ./monitoring/grafana/custom_icons/grafana_icon.svg:/usr/share/grafana/public/img/grafana_icon.svg
+      - ./monitoring/grafana/custom_icons/grafana_icon.svg:/usr/share/grafana/public/app/plugins/datasource/loki/dist/img/grafana_icon.svg
+      - ./monitoring/grafana/custom_icons/grafana_icon.svg:/usr/share/grafana/public/app/plugins/datasource/loki/img/grafana_icon.svg
+    networks:
+      - saas_network
+
+  # Test Database for running tests
+  test-postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: test_saas_orchestrator
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - saas_network
+    profiles:
+      - test
+
+  # Backend for testing
+  test-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://test_user:test_password@test-postgres:5432/test_saas_orchestrator
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET_KEY: test-jwt-secret-key-for-testing-only
+      ENCRYPTION_KEY: test-32-byte-encryption-key-test-only
+      TIMEZONE: Asia/Dhaka
+      TEST_MODE: "true"
+    depends_on:
+      - test-postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    networks:
+      - saas_network
+    profiles:
+      - test
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  test_postgres_data:
+
+networks:
+  saas_network:
+    driver: bridge

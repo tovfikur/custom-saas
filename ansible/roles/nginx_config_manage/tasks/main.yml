@@ -1,0 +1,42 @@
+---
+# Main tasks for nginx config management
+- name: Ensure nginx managed directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/nginx/managed.d
+    - /etc/nginx/managed.d/drafts
+    - /srv/backups/nginx
+  tags: [nginx, setup]
+
+- name: Create nginx config backup
+  include_tasks: backup_config.yml
+  when: backup_config | default(true)
+  tags: [nginx, backup]
+
+- name: Validate nginx configuration
+  include_tasks: validate_config.yml
+  when: config_content is defined
+  tags: [nginx, validate]
+
+- name: Apply nginx configuration
+  include_tasks: apply_config.yml
+  when: 
+    - config_content is defined
+    - apply_config | default(false)
+    - validation_result.rc == 0
+  tags: [nginx, apply]
+
+- name: Rollback nginx configuration
+  include_tasks: rollback.yml
+  when: rollback_version is defined
+  tags: [nginx, rollback]
+
+- name: Health check after config change
+  include_tasks: health_check.yml
+  when: perform_health_check | default(true)
+  tags: [nginx, health]
