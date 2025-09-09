@@ -52,7 +52,46 @@ export default function DockerStatus({ vpsId }: DockerStatusProps) {
   }
 
   const status = dockerStatus.data;
-  const isRunning = status.status === 'running';
+  const statusKey = status.status as string;
+
+  const stateMap: Record<string, {
+    label: string;
+    badgeClass: string;
+    headerBgClass: string;
+    iconClass: string;
+    isRunning: boolean;
+  }> = {
+    running: {
+      label: 'Running',
+      badgeClass: 'bg-green-100 text-green-800',
+      headerBgClass: 'bg-green-100',
+      iconClass: 'text-green-600',
+      isRunning: true,
+    },
+    stopped: {
+      label: 'Stopped',
+      badgeClass: 'bg-red-100 text-red-800',
+      headerBgClass: 'bg-red-100',
+      iconClass: 'text-red-600',
+      isRunning: false,
+    },
+    not_present: {
+      label: 'Docker Unavailable',
+      badgeClass: 'bg-gray-100 text-gray-800',
+      headerBgClass: 'bg-gray-100',
+      iconClass: 'text-gray-600',
+      isRunning: false,
+    },
+    error: {
+      label: 'Error',
+      badgeClass: 'bg-red-100 text-red-800',
+      headerBgClass: 'bg-red-100',
+      iconClass: 'text-red-600',
+      isRunning: false,
+    },
+  };
+
+  const mapped = stateMap[statusKey] ?? stateMap.error;
 
   const stats = [
     {
@@ -92,11 +131,11 @@ export default function DockerStatus({ vpsId }: DockerStatusProps) {
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <div className={`p-2 rounded-md ${isRunning ? 'bg-green-100' : 'bg-red-100'}`}>
-              {isRunning ? (
-                <CheckCircleIcon className="h-6 w-6 text-green-600" />
+            <div className={`p-2 rounded-md ${mapped.headerBgClass}`}>
+              {mapped.isRunning ? (
+                <CheckCircleIcon className={`h-6 w-6 ${mapped.iconClass}`} />
               ) : (
-                <XCircleIcon className="h-6 w-6 text-red-600" />
+                <XCircleIcon className={`h-6 w-6 ${mapped.iconClass}`} />
               )}
             </div>
             <div className="ml-4">
@@ -107,12 +146,8 @@ export default function DockerStatus({ vpsId }: DockerStatusProps) {
             </div>
           </div>
           <div className="flex items-center">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-              isRunning 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {isRunning ? 'Running' : 'Stopped'}
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${mapped.badgeClass}`}>
+              {mapped.label}
             </span>
           </div>
         </div>
