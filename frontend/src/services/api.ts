@@ -153,7 +153,7 @@ export const monitoringApi = {
 export const odooApi = {
   getTemplates: (params: { is_public?: boolean; industry?: string; version?: string; category?: string; complexity_level?: string } = {}): Promise<AxiosResponse<{ templates: OdooTemplate[]; total: number; page: number; per_page: number }>> =>
     api.get('/odoo/templates', { params }),
-
+    getVpsHosts: () => vpsApi.list(),
   createTemplate: (data: FormData): Promise<AxiosResponse<OdooTemplate>> =>
     api.post('/odoo/templates', data, {
       headers: {

@@ -184,6 +184,7 @@ export interface OdooTemplate {
   backup_db_user?: string;
   backup_db_host?: string;
   backup_db_port?: number;
+  default_modules?: string[];
 }
 
 export interface OdooDeploymentCreate {

@@ -1,0 +1,73 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editors
+.idea/
+.vscode/
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+site/
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+.mypy_cache/
+.pyre/
+.pytype/
+celerybeat-schedule
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+frontend/dist/
+
+# Logs
+*.log
+logs/
+
+# Environment files (keep .env.example tracked)
+.env
+*.env
+.env.*
+backend/.env
+frontend/.env
+
+# Databases / data
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Temporary files
+tmp/
+temp/
+*.swp
+*.swo
+
+# Ansible
+*.retry
+
+# Project-specific
+backend/uploads/
+dummy_backup.zip
+token.json
