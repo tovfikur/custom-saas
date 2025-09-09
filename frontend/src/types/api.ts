@@ -47,8 +47,8 @@ export interface VPSHost {
 
 export interface VPSOnboardRequest {
   name: string;
-  hostname: string;
-  ip_address: string;
+  hostname?: string;
+  ip_address?: string;
   username: string;
   port?: number;
   password?: string;

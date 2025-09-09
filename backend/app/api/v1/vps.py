@@ -18,8 +18,8 @@ router = APIRouter()
 # Pydantic models
 class VPSOnboardRequest(BaseModel):
     name: str = Field(..., description="VPS name")
-    hostname: str = Field(..., description="VPS hostname")
-    ip_address: str = Field(..., description="VPS IP address")
+    hostname: Optional[str] = Field(None, description="VPS hostname")
+    ip_address: Optional[str] = Field(None, description="VPS IP address or hostname")
     username: str = Field(..., description="SSH username")
     port: int = Field(default=22, description="SSH port")
     password: Optional[str] = Field(None, description="SSH password")
@@ -65,6 +65,17 @@ async def onboard_vps(
         print("Initialized SSH service")
         vps_service = VPSService(db, ssh_service, audit_service)
         print("Initialized services")
+        # Normalize inputs
+        hostname = (request_data.hostname or "").strip()
+        ip_address = (request_data.ip_address or "").strip()
+
+        # Validate that we have either hostname or ip
+        if not hostname and not ip_address:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either hostname or ip_address must be provided"
+            )
+
         # Validate that we have either password or private key
         if not request_data.password and not request_data.private_key:
             print("No password or private key provided")
@@ -75,8 +86,9 @@ async def onboard_vps(
         print("Validated credentials")
         result = await vps_service.onboard_vps(
             name=request_data.name,
-            hostname=request_data.hostname,
-            ip_address=request_data.ip_address,
+            # If one of hostname/IP is missing, fallback to the other
+            hostname=hostname if hostname else ip_address,
+            ip_address=ip_address if ip_address else hostname,
             username=request_data.username,
             actor_id=str(current_admin.id),
             port=request_data.port,

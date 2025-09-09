@@ -57,11 +57,28 @@ class DockerService:
                     "system_info": {"error": "Cannot connect to VPS"}
                 }
             
-            # Get Docker version
+            # First, detect if Docker CLI is present on the host
+            docker_present_check = await self.ssh_service.execute_command(
+                vps.id, "command -v docker >/dev/null 2>&1 && echo present || echo absent", host_info=host_info
+            )
+            docker_present = docker_present_check.get("stdout", "").strip() == "present"
+
+            if not docker_present:
+                return {
+                    "success": True,
+                    "status": "not_present",
+                    "version": "N/A",
+                    "containers_running": 0,
+                    "containers_total": 0,
+                    "images_count": 0,
+                    "system_info": {"error": "Docker not installed on host"}
+                }
+
+            # Get Docker version (Docker is present)
             version_result = await self.ssh_service.execute_command(
                 vps.id, "docker --version", host_info=host_info
             )
-            docker_version = version_result.get("stdout", "Unknown").strip()
+            docker_version = version_result.get("stdout", "Unknown").strip() or "Unknown"
             
             # Get Docker system info
             info_result = await self.ssh_service.execute_command(

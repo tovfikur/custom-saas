@@ -75,13 +75,11 @@ export default function VPSOnboardingModal({ isOpen, onClose }: VPSOnboardingMod
       return;
     }
     
-    if (!formData.hostname.trim()) {
-      toast.error('Please enter a hostname');
-      return;
-    }
-    
-    if (!formData.ip_address.trim()) {
-      toast.error('Please enter an IP address');
+    // Allow either hostname or IP address
+    const hasHostname = !!formData.hostname?.trim();
+    const hasIp = !!formData.ip_address?.trim();
+    if (!hasHostname && !hasIp) {
+      toast.error('Please provide either a hostname or an IP address');
       return;
     }
     
@@ -102,8 +100,13 @@ export default function VPSOnboardingModal({ isOpen, onClose }: VPSOnboardingMod
     }
 
     // Submit form
+    // Normalize: if only one of hostname/IP provided, use it for both fields
+    const normalizedHostname = hasHostname ? (formData.hostname || '').trim() : (formData.ip_address || '').trim();
+    const normalizedIp = hasIp ? (formData.ip_address || '').trim() : (formData.hostname || '').trim();
     const submitData = {
       ...formData,
+      hostname: normalizedHostname,
+      ip_address: normalizedIp,
       password: authMethod === 'password' ? formData.password : undefined,
       private_key: authMethod === 'key' ? formData.private_key : undefined
     };
@@ -193,7 +196,7 @@ export default function VPSOnboardingModal({ isOpen, onClose }: VPSOnboardingMod
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
-                        Hostname *
+                        Hostname
                       </label>
                       <input
                         type="text"
@@ -201,13 +204,12 @@ export default function VPSOnboardingModal({ isOpen, onClose }: VPSOnboardingMod
                         onChange={(e) => handleInputChange('hostname', e.target.value)}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                         placeholder="e.g., server1.example.com"
-                        required
                       />
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
-                        IP Address *
+                        IP Address
                       </label>
                       <input
                         type="text"
@@ -215,7 +217,6 @@ export default function VPSOnboardingModal({ isOpen, onClose }: VPSOnboardingMod
                         onChange={(e) => handleInputChange('ip_address', e.target.value)}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                         placeholder="e.g., 192.168.1.100"
-                        required
                       />
                     </div>
 
