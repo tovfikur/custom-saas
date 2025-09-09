@@ -1,0 +1,5 @@
+# Dependencies
+node_modules/
+
+# Dummy backup ZIP archive
+dummy_backup.zip
