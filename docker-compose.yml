@@ -19,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     networks:
       - saas_network
 
@@ -28,6 +28,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    user: "1000:1000"
     ports:
       - "8000:8000"
     environment:
@@ -56,6 +57,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: celery -A app.worker worker --loglevel=info
+    user: "1000:1000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/saas_orchestrator
       REDIS_URL: redis://redis:6379
@@ -82,6 +84,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: celery -A app.worker beat --loglevel=info
+    user: "1000:1000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/saas_orchestrator
       REDIS_URL: redis://redis:6379

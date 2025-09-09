@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  PlusIcon, 
+import OdooDeployModal from '@/components/modals/OdooDeployModal';
+import { odooApi, vpsApi } from '@/services/api';
+import {
+  PlusIcon,
   ServerIcon,
   PlayIcon,
   StopIcon,
@@ -10,8 +12,7 @@ import {
   InformationCircleIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
-import { odooApi } from '@/services/api';
-import type { OdooTemplate, OdooDeployment } from '@/types/api';
+import type {OdooTemplate, OdooDeployment, VPSHost} from '@/types/api';
 
 export default function OdooManagement() {
   const [activeTab, setActiveTab] = useState<'templates' | 'deployments'>('templates');
@@ -19,6 +20,14 @@ export default function OdooManagement() {
   const [selectedTemplate, setSelectedTemplate] = useState<OdooTemplate | null>(null);
   const [showTemplateDetails, setShowTemplateDetails] = useState(false);
   const queryClient = useQueryClient();
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [selectedTemplateForDeploy, setSelectedTemplateForDeploy] = useState<OdooTemplate | null>(null);
+
+    const { data: vpsHosts = [] } = useQuery<VPSHost[]>({
+        queryKey: ['vps-hosts'],
+        queryFn: () => vpsApi.list(true).then(r => r.data), // r.data is VPSHost[]
+    });
+
 
   const { data: templates } = useQuery({
     queryKey: ['odoo-templates'],
@@ -169,11 +178,14 @@ export default function OdooManagement() {
                       {deleteTemplateMutation.isPending ? 'Deleting...' : 'Delete'}
                     </button>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('Deploy', template.id);
-                      }}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setSelectedTemplateForDeploy(template);
+                            setShowDeployModal(true);
+                        }}
+
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <PlayIcon className="h-4 w-4 mr-1" />
                       Deploy
@@ -631,11 +643,67 @@ export default function OdooManagement() {
                   <PlayIcon className="h-4 w-4 mr-2" />
                   Deploy Template
                 </button>
+                  <button
+                      onClick={() => {
+                          setShowTemplateDetails(false);
+                          setSelectedTemplateForDeploy(selectedTemplate);
+                          setShowDeployModal(true);
+                      }}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                      <PlayIcon className="h-4 w-4 mr-2" />
+                      Deploy Template
+                  </button>
               </div>
             </div>
           </div>
         </div>
       )}
+        {showDeployModal && selectedTemplateForDeploy && (
+            <OdooDeployModal
+                isOpen={showDeployModal}
+                onClose={() => setShowDeployModal(false)}
+                template={selectedTemplateForDeploy}
+                vpsHosts={vpsHosts}
+                onSubmit={async (formData) => {
+                    const data = Object.fromEntries(formData as any) as any;
+                    const token = localStorage.getItem('token') ?? '';
+                    const payload = {
+                        template_id: selectedTemplateForDeploy.id,
+                        vps_id: data.vps_id,
+                        deployment_name:
+                            (data.deployment_name as string) ??
+                            selectedTemplateForDeploy.name.replace(/\s+/g, '-').toLowerCase(),
+                        domain: data.domain,
+                        // optional:
+                        selected_version: selectedTemplateForDeploy.version,
+                        selected_modules: [],
+                        custom_config: {},
+                        custom_env_vars: {},
+                    };
+
+                    const res = await fetch('/api/v1/deployments/odoo', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        console.error('Deploy failed:', err);
+                        // show your toast/alert here
+                        return;
+                    }
+
+                    const json = await res.json();
+                    console.log('Deploy started:', json);
+                    setShowDeployModal(false);
+                }}
+            />
+        )}
     </div>
   );
 }
