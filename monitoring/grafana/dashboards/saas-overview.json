@@ -1,7 +1,6 @@
 {
-  "dashboard": {
-    "id": null,
-    "title": "SaaS Orchestrator Overview",
+  "id": null,
+  "title": "SaaS Orchestrator Overview",
     "tags": ["saas", "orchestrator"],
     "style": "dark",
     "timezone": "Asia/Dhaka",
@@ -206,5 +205,4 @@
         ]
       }
     ]
-  }
 }

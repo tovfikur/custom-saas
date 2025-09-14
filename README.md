@@ -80,3 +80,7 @@ See the `docs/` directory for detailed documentation:
 ## License
 
 Proprietary - All rights reserved
+
+## Contributors
+
+- [@KhanShadman06](https://github.com/KhanShadman06)

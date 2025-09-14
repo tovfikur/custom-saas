@@ -35,7 +35,7 @@ scrape_configs:
   # Nginx metrics
   - job_name: "nginx-exporter"
     static_configs:
-      - targets: [] # Will be populated dynamically
+      - targets: ["192.168.50.2:9113"] # Will be populated dynamically
     scrape_interval: 30s
 
   # Docker container metrics

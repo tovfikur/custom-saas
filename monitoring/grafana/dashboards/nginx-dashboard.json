@@ -1,0 +1,461 @@
+{
+  "id": null,
+  "title": "Nginx Monitoring Dashboard",
+    "tags": ["nginx", "web-server", "monitoring"],
+    "style": "dark",
+    "timezone": "Asia/Dhaka",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Nginx Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "type": "value",
+                "value": "1",
+                "text": "UP"
+              },
+              {
+                "type": "value",
+                "value": "0",
+                "text": "DOWN"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "targets": [
+          {
+            "expr": "up{job=\"nginx-exporter\"}",
+            "legendFormat": "Nginx Status"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Active Connections",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 100
+                },
+                {
+                  "color": "red",
+                  "value": 500
+                }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value"
+        },
+        "targets": [
+          {
+            "expr": "nginx_connections_active",
+            "legendFormat": "Active Connections"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Total Requests",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value"
+        },
+        "targets": [
+          {
+            "expr": "nginx_http_requests_total",
+            "legendFormat": "Total Requests"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Request Rate (req/sec)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "reqps"
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value"
+        },
+        "targets": [
+          {
+            "expr": "rate(nginx_http_requests_total[5m])",
+            "legendFormat": "Request Rate"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "HTTP Status Codes",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Requests/sec",
+            "min": 0,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "targets": [
+          {
+            "expr": "rate(nginx_http_requests_total{status=~\"2..\"}[5m])",
+            "legendFormat": "2xx Success"
+          },
+          {
+            "expr": "rate(nginx_http_requests_total{status=~\"3..\"}[5m])",
+            "legendFormat": "3xx Redirect"
+          },
+          {
+            "expr": "rate(nginx_http_requests_total{status=~\"4..\"}[5m])",
+            "legendFormat": "4xx Client Error"
+          },
+          {
+            "expr": "rate(nginx_http_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "5xx Server Error"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Connection States",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Connections",
+            "min": 0,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "targets": [
+          {
+            "expr": "nginx_connections_active",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "nginx_connections_accepted",
+            "legendFormat": "Accepted"
+          },
+          {
+            "expr": "nginx_connections_handled",
+            "legendFormat": "Handled"
+          },
+          {
+            "expr": "nginx_connections_reading",
+            "legendFormat": "Reading"
+          },
+          {
+            "expr": "nginx_connections_writing",
+            "legendFormat": "Writing"
+          },
+          {
+            "expr": "nginx_connections_waiting",
+            "legendFormat": "Waiting"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Request Rate by Virtual Host",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Requests/sec",
+            "min": 0,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "targets": [
+          {
+            "expr": "rate(nginx_server_requests{server_name!=\"_\"}[5m])",
+            "legendFormat": "{{server_name}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Response Time Distribution",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Response Time (ms)",
+            "min": 0,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(nginx_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "50th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.90, rate(nginx_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "90th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(nginx_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "99th percentile"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "SSL/TLS Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Connections/sec",
+            "min": 0,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "targets": [
+          {
+            "expr": "rate(nginx_ssl_handshakes_total[5m])",
+            "legendFormat": "SSL Handshakes"
+          },
+          {
+            "expr": "rate(nginx_ssl_handshakes_failed_total[5m])",
+            "legendFormat": "SSL Handshake Failures"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Upstream Response Time",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+        "xAxis": {
+          "show": true
+        },
+        "yAxes": [
+          {
+            "label": "Response Time (ms)",
+            "min": 0,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true
+        },
+        "targets": [
+          {
+            "expr": "rate(nginx_upstream_response_time_seconds_sum[5m]) / rate(nginx_upstream_response_time_seconds_count[5m]) * 1000",
+            "legendFormat": "{{upstream}} - Avg Response Time"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Nginx Configuration Changes",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+        "options": {
+          "showHeader": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "width": 0
+            }
+          }
+        },
+        "targets": [
+          {
+            "expr": "increase(nginx_config_operations_total[1h])",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Top 10 URLs by Request Count",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "basic"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "targets": [
+          {
+            "expr": "topk(10, rate(nginx_http_requests_total[5m]))",
+            "legendFormat": "{{uri}}"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Error Rate",
+        "type": "singlestat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+        "valueName": "current",
+        "format": "percent",
+        "thresholds": "5,10",
+        "colorBackground": true,
+        "colors": [
+          "rgba(50, 172, 45, 0.97)",
+          "rgba(237, 129, 40, 0.89)",
+          "rgba(245, 54, 54, 0.9)"
+        ],
+        "targets": [
+          {
+            "expr": "(rate(nginx_http_requests_total{status=~\"4..|5..\"}[5m]) / rate(nginx_http_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ]
+      }
+    ]
+}
