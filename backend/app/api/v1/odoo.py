@@ -23,12 +23,6 @@ class OdooTemplateCreate(BaseModel):
     version: str = Field(..., pattern="^(13|14|15|16|17|latest)$")
     description: Optional[str] = None
     
-    # Database backup credentials
-    backup_db_name: Optional[str] = None
-    backup_db_user: Optional[str] = None
-    backup_db_password: Optional[str] = None
-    backup_db_host: Optional[str] = Field(default="localhost")
-    backup_db_port: Optional[int] = Field(default=5432)
     
     # Template configuration
     docker_image: Optional[str] = None
@@ -177,11 +171,6 @@ async def create_template(
     industry: str = Form(...),
     version: str = Form(...),
     description: str = Form(None),
-    backup_db_name: str = Form(None),
-    backup_db_user: str = Form(None),
-    backup_db_password: str = Form(None),
-    backup_db_host: str = Form("localhost"),
-    backup_db_port: int = Form(5432),
     backup_file: UploadFile = File(None),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_active_admin)
@@ -189,7 +178,7 @@ async def create_template(
     """Create a new Odoo template"""
     try:
         service = OdooDeploymentService(db)
-        
+
         # Handle backup file upload
         backup_file_path = None
         if backup_file and backup_file.filename:
@@ -197,29 +186,24 @@ async def create_template(
             import os
             uploads_dir = "/app/uploads/templates"
             os.makedirs(uploads_dir, exist_ok=True)
-            
+
             # Generate secure filename
             import uuid
             file_extension = backup_file.filename.split('.')[-1] if '.' in backup_file.filename else ''
             secure_filename = f"{uuid.uuid4()}.{file_extension}"
             backup_file_path = os.path.join(uploads_dir, secure_filename)
-            
+
             # Save the file
             with open(backup_file_path, "wb") as buffer:
                 content = await backup_file.read()
                 buffer.write(content)
-        
+
         created_template = await service.create_template(
             name=name,
             industry=industry,
             version=version,
             backup_file_path=backup_file_path,
             admin_id=str(current_admin.id),
-            backup_db_name=backup_db_name,
-            backup_db_user=backup_db_user,
-            backup_db_password=backup_db_password,
-            backup_db_host=backup_db_host,
-            backup_db_port=backup_db_port,
             description=description,
             is_public=False,
             category="business",

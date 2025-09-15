@@ -138,12 +138,6 @@ export interface OdooTemplateCreate {
   version: string;
   description?: string;
   
-  // Database backup credentials
-  backup_db_name?: string;
-  backup_db_user?: string;
-  backup_db_password?: string;
-  backup_db_host?: string;
-  backup_db_port?: number;
   
   // Template configuration
   docker_image?: string;
@@ -179,11 +173,6 @@ export interface OdooTemplate {
   created_at: string;
   updated_at: string;
   
-  // Database backup info (not exposed for security)
-  backup_db_name?: string;
-  backup_db_user?: string;
-  backup_db_host?: string;
-  backup_db_port?: number;
   default_modules?: string[];
 }
 

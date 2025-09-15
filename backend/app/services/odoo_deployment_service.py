@@ -71,31 +71,15 @@ class OdooDeploymentService:
             logger.error(f"Failed to get templates: {e}")
             return {"templates": [], "total": 0, "page": page, "per_page": per_page}
     
-    async def create_template(self, name: str, industry: str, version: str, 
-                             backup_file_path: str, admin_id: str, 
-                             backup_db_name: Optional[str] = None,
-                             backup_db_user: Optional[str] = None,
-                             backup_db_password: Optional[str] = None,
-                             backup_db_host: Optional[str] = None,
-                             backup_db_port: Optional[int] = None,
-                             **kwargs) -> Optional[OdooTemplate]:
+    async def create_template(self, name: str, industry: str, version: str,
+                             backup_file_path: str, admin_id: str, **kwargs) -> Optional[OdooTemplate]:
         """Create a new Odoo template"""
         try:
-            # Encrypt database password if provided
-            encrypted_db_password = None
-            if backup_db_password:
-                encrypted_db_password = encrypt_data(backup_db_password)
-            
             template = OdooTemplate(
                 name=name,
                 industry=industry,
                 version=version,
                 backup_file_path=backup_file_path,
-                backup_db_name=backup_db_name,
-                backup_db_user=backup_db_user,
-                backup_db_password=encrypted_db_password,
-                backup_db_host=backup_db_host or 'localhost',
-                backup_db_port=backup_db_port or 5432,
                 description=kwargs.get('description'),
                 docker_image=kwargs.get('docker_image'),
                 default_modules=kwargs.get('default_modules'),
@@ -109,7 +93,7 @@ class OdooDeploymentService:
                 post_install_script=kwargs.get('post_install_script'),
                 required_addons=kwargs.get('required_addons')
             )
-            
+
             # Set backup file size if file exists
             if backup_file_path and os.path.exists(backup_file_path):
                 template.backup_file_size = os.path.getsize(backup_file_path)

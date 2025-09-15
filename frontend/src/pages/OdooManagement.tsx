@@ -370,82 +370,23 @@ export default function OdooManagement() {
                     placeholder="Complete restaurant management with POS, inventory, and accounting"
                   />
                 </div>
-                
-                {/* Database Backup Credentials Section */}
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Database Backup Credentials</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Database Name</label>
-                      <input
-                        type="text"
-                        name="backup_db_name"
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="odoo_db"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Database User</label>
-                      <input
-                        type="text"
-                        name="backup_db_user"
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="odoo"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Database Password</label>
-                      <input
-                        type="password"
-                        name="backup_db_password"
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="••••••••"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Database Host</label>
-                      <input
-                        type="text"
-                        name="backup_db_host"
-                        defaultValue="localhost"
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        placeholder="localhost"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700">Database Port</label>
-                    <input
-                      type="number"
-                      name="backup_db_port"
-                      defaultValue="5432"
-                      min="1"
-                      max="65535"
-                      className="mt-1 block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="5432"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700">Database Backup File</label>
-                    <input
-                      type="file"
-                      name="backup_file"
-                      accept=".zip,.sql,.gz"
-                      className="mt-1 block w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-blue-50 file:text-blue-700
-                        hover:file:bg-blue-100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Upload a database backup file (.zip, .sql, or .gz). This will be used as the base database for new deployments.
-                    </p>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-4">
-                    The database credentials and backup file will be used to restore the database when deploying this template.
+
+                {/* Database Backup File */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Database Backup File</label>
+                  <input
+                    type="file"
+                    name="backup_file"
+                    accept=".zip,.sql,.gz"
+                    className="mt-1 block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-full file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-blue-50 file:text-blue-700
+                      hover:file:bg-blue-100"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Upload a database backup file (.zip, .sql, or .gz). This will be used as the base database for new deployments.
                   </p>
                 </div>
               </div>
@@ -556,28 +497,6 @@ export default function OdooManagement() {
                 </div>
               )}
 
-              {/* Database Information */}
-              <div>
-                <h4 className="text-lg font-medium text-gray-900 mb-3">Database Configuration</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Database Name:</span>
-                    <p className="text-sm text-gray-900">{selectedTemplate.backup_db_name || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Database User:</span>
-                    <p className="text-sm text-gray-900">{selectedTemplate.backup_db_user || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Database Host:</span>
-                    <p className="text-sm text-gray-900">{selectedTemplate.backup_db_host || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-500">Database Port:</span>
-                    <p className="text-sm text-gray-900">{selectedTemplate.backup_db_port || 'Not specified'}</p>
-                  </div>
-                </div>
-              </div>
 
               {/* Tags */}
               {selectedTemplate.tags && selectedTemplate.tags.length > 0 && (
