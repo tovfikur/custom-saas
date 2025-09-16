@@ -98,7 +98,7 @@ app.add_middleware(create_metrics_middleware)
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],  # Frontend URLs
+    allow_origins=["*"],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -130,7 +130,7 @@ async def http_exception_handler(request, exc: HTTPException):
         }
     )
     # Add CORS headers for error responses
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
@@ -147,7 +147,7 @@ async def general_exception_handler(request, exc: Exception):
         }
     )
     # Add CORS headers for error responses
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
