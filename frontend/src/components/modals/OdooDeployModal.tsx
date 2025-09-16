@@ -55,12 +55,12 @@ export default function OdooDeployModal({ isOpen, onClose, template, vpsHosts, o
 
                         {/* DB Credentials */}
                         <div className="grid grid-cols-2 gap-4">
-                            <input type="text" name="db_name" required placeholder="DB Name (odoo)" className="form-input mt-1 w-full" />
                             <input type="text" name="db_name" required placeholder="DB Name" className="form-input mt-1 w-full" />
                             <input type="text" name="db_user" required placeholder="DB User" className="form-input mt-1 w-full" />
                             <input type="password" name="db_password" required placeholder="DB Password" className="form-input mt-1 w-full" />
-                            <input type="text" name="db_host" defaultValue="localhost" className="form-input mt-1 w-full" />
+                            <input type="text" name="db_host" defaultValue="192.168.50.2" className="form-input mt-1 w-full" />
                             <input type="number" name="db_port" defaultValue="5432" className="form-input mt-1 w-full" />
+                            <input type="text" name="deployment_name" placeholder="Deployment Name (optional)" className="form-input mt-1 w-full" />
                         </div>
 
                         {/* Actions */}

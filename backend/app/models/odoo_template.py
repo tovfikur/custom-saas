@@ -66,7 +66,7 @@ class OdooTemplate(Base, BaseModel):
     @property
     def is_available(self) -> bool:
         """Check if template is available for deployment"""
-        return self.is_active and bool(self.backup_file_path)
+        return self.is_active  # Allow deployment with or without backup file
     
     @property
     def backup_file_size_mb(self) -> int:

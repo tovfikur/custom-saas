@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.admin import Admin
 from app.services.odoo_deployment_service import OdooDeploymentService
-from app.api.v1.auth import get_current_active_admin
+from app.api.deps import get_current_active_admin
 
 
 router = APIRouter(prefix="/deployments", tags=["deployments"])
@@ -122,6 +122,12 @@ class DeployOdooRequest(BaseModel):
     custom_config: Optional[Dict[str, Any]] = None
     custom_env_vars: Optional[Dict[str, Any]] = None
     admin_password: Optional[str] = None  # optional override
+    # Database configuration
+    db_name: Optional[str] = None
+    db_user: Optional[str] = None
+    db_password: Optional[str] = None
+    db_host: Optional[str] = "localhost"
+    db_port: Optional[int] = 5432
 
 class DeployOdooResponse(BaseModel):
     success: bool
@@ -135,6 +141,7 @@ async def deploy_odoo(
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_active_admin),
 ):
+     
     svc = OdooDeploymentService(db)
 
     deployment = await svc.deploy_odoo(
@@ -148,6 +155,11 @@ async def deploy_odoo(
         custom_config=body.custom_config,
         custom_env_vars=body.custom_env_vars,
         admin_password=body.admin_password,
+        db_name=body.db_name,
+        db_user=body.db_user,
+        db_password=body.db_password,
+        db_host=body.db_host,
+        db_port=body.db_port,
     )
 
     if not deployment:

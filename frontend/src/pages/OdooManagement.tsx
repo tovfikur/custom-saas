@@ -586,7 +586,8 @@ export default function OdooManagement() {
                 vpsHosts={vpsHosts}
                 onSubmit={async (formData) => {
                     const data = Object.fromEntries(formData as any) as any;
-                    const token = localStorage.getItem('token') ?? '';
+                    const token = localStorage.getItem('auth_token') ?? '';
+                    console.log('Token found:', token ? 'Yes' : 'No', token?.substring(0, 20) + '...');
                     const payload = {
                         template_id: selectedTemplateForDeploy.id,
                         vps_id: data.vps_id,
@@ -599,27 +600,25 @@ export default function OdooManagement() {
                         selected_modules: [],
                         custom_config: {},
                         custom_env_vars: {},
+                        // database configuration:
+                        db_name: data.db_name,
+                        db_user: data.db_user,
+                        db_password: data.db_password,
+                        db_host: data.db_host || 'localhost',
+                        db_port: data.db_port ? parseInt(data.db_port) : 5432,
                     };
 
-                    const res = await fetch('/api/v1/deployments/odoo', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify(payload),
-                    });
-
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        console.error('Deploy failed:', err);
+                    try {
+                        const res = await odooApi.deployOdoo(payload);
+                        console.log('Deployment successful:', res.data);
+                        // Refresh deployments list
+                        queryClient.invalidateQueries({ queryKey: ['odoo-deployments'] });
+                        setShowDeployModal(false);
+                    } catch (error: any) {
+                        console.error('Deploy failed:', error.response?.data || error.message);
                         // show your toast/alert here
                         return;
                     }
-
-                    const json = await res.json();
-                    console.log('Deploy started:', json);
-                    setShowDeployModal(false);
                 }}
             />
         )}

@@ -41,6 +41,7 @@ services:
       ADMIN_PASSWORD: admin
       CELERY_BROKER_URL: redis://redis:6379
       CELERY_RESULT_BACKEND: redis://redis:6379
+      DEBUG: "true"
     depends_on:
       - postgres
       - redis

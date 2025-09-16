@@ -180,31 +180,53 @@ class OdooDeploymentService:
             await self.db.rollback()
             raise
     
-    async def find_available_port(self, vps_id: str, start_port: int = 8000, end_port: int = 9000) -> int:
+    async def find_available_port(self, vps_id: str, start_port: int = 8001, end_port: int = 8100) -> int:
         """Find an available port on the VPS for the new Odoo instance"""
         try:
-            # Get all existing instances on this VPS
-            query = select(OdooInstance).where(OdooInstance.vps_id == vps_id)
-            result = await self.db.execute(query)
-            instances = result.scalars().all()
-            
-            # Get used ports
-            used_ports = set(instance.port for instance in instances)
-            
-            # Find first available port
-            for port in range(start_port, end_port + 1):
-                if port not in used_ports:
-                    return port
-            
-            raise ValueError(f"No available ports in range {start_port}-{end_port}")
+            # Get VPS connection info
+            vps_query = select(VPSHost).where(VPSHost.id == vps_id)
+            vps_result = await self.db.execute(vps_query)
+            vps = vps_result.scalar_one_or_none()
+
+            if not vps:
+                raise ValueError("VPS not found")
+
+            host_info = {
+                'ip_address': vps.ip_address,
+                'port': vps.port,
+                'username': vps.username,
+                'password_encrypted': vps.password_encrypted,
+                'private_key_encrypted': vps.private_key_encrypted
+            }
+
+            # Use improved port detection logic (same as simple-deploy)
+            for test_port in range(start_port, end_port + 1):
+                # Check if port is in use with simple netstat command
+                check_cmd = f"netstat -tuln | grep ':{test_port} ' || echo 'PORT_AVAILABLE'"
+                result = await self.ssh_service.execute_command(vps_id, check_cmd, host_info=host_info)
+
+                # If netstat finds nothing or command succeeds with PORT_AVAILABLE, port is free
+                if result.get("success"):
+                    output = result.get("stdout", "").strip()
+                    print(f"Port {test_port} check output: '{output}'")
+
+                    # Port is available if netstat finds no matches (returns only PORT_AVAILABLE)
+                    if output == "PORT_AVAILABLE" or not output or "PORT_AVAILABLE" in output:
+                        logger.info(f"Found available port {test_port} on VPS {vps_id}")
+                        print(f"Using available port: {test_port}")
+                        return test_port
+
+            raise ValueError(f"No available ports in range {start_port}-{end_port} on VPS {vps_id}")
         except Exception as e:
-            logger.error(f"Failed to find available port: {e}")
+            logger.error(f"Failed to find available port on VPS {vps_id}: {e}")
             raise
     
     async def deploy_odoo(self, template_id: str, vps_id: str, deployment_name: str, 
                          domain: str, admin_id: str, **kwargs) -> Optional[OdooDeployment]:
         """Deploy an Odoo instance from a template"""
         deployment = None
+        
+        
         try:
             # Get template
             template = await self.get_template(template_id)
@@ -223,10 +245,37 @@ class OdooDeploymentService:
                                                 template.default_port_range_start,
                                                 template.default_port_range_end)
             
-            # Generate database name and admin password
-            db_name = f"odoo_{deployment_name.lower().replace('-', '_').replace(' ', '_')}"
-            admin_password = kwargs.get('admin_password', generate_secure_token(16))
+                       
             
+            
+            # Generate database name and admin password
+            db_name = f"{deployment_name.lower().replace('-', '_').replace(' ', '_')}"
+            admin_password = kwargs.get('admin_password') or generate_secure_token(16)
+
+            # Ensure admin_password is a string
+            if not isinstance(admin_password, str):
+                admin_password = str(admin_password)
+
+            print(f"Admin password type: {type(admin_password)}, value length: {len(admin_password)}")
+            
+            # Generate deployment ID
+            deployment_id = str(uuid.uuid4())            
+            deployment_name = f"{deployment_name.lower().replace('-', '_').replace(' ', '_')}_{deployment_id[:8]}"
+            
+    
+            
+            print("Preparing to create deployment record")
+
+            # Encrypt admin password with better error handling
+            try:
+                print(f"Encrypting password: {admin_password[:5]}...")
+                encrypted_password = encrypt_data(admin_password)
+                print("Password encrypted successfully")
+            except Exception as e:
+                logger.error(f"Failed to encrypt admin password: {e}")
+                print(f"Encryption error: {e}")
+                raise
+
             # Create deployment record
             deployment = OdooDeployment(
                 template_id=template_id,
@@ -236,7 +285,7 @@ class OdooDeploymentService:
                 selected_version=kwargs.get('selected_version', template.version),
                 port=port,
                 db_name=db_name,
-                admin_password=encrypt_data(admin_password),
+                admin_password=encrypted_password,
                 selected_modules=kwargs.get('selected_modules', template.default_modules),
                 custom_config=kwargs.get('custom_config'),
                 custom_env_vars=kwargs.get('custom_env_vars'),
@@ -244,12 +293,19 @@ class OdooDeploymentService:
                 started_at=datetime.now(timezone.utc)
             )
             
-            self.db.add(deployment)
-            await self.db.commit()
-            await self.db.refresh(deployment)
+            print("Created deployment record")
             
-            # Start deployment process
-            await self._deploy_container(deployment, template, vps, admin_password)
+            self.db.add(deployment)
+            
+            print("Added deployment to DB session")
+            await self.db.commit()
+            print("Committed DB session")
+            await self.db.refresh(deployment)
+            print("Refreshed deployment from DB")
+            
+            # Start deployment process - remove admin_password from kwargs to avoid duplicate
+            kwargs_without_admin_password = {k: v for k, v in kwargs.items() if k != 'admin_password'}
+            await self._deploy_container(deployment, template, vps, admin_password, **kwargs_without_admin_password)
             
             # Increment template deployment counter
             template.increment_deployment_count()
@@ -265,8 +321,8 @@ class OdooDeploymentService:
                 await self.db.commit()
             return deployment
     
-    async def _deploy_container(self, deployment: OdooDeployment, template: OdooTemplate, 
-                               vps: VPSHost, admin_password: str):
+    async def _deploy_container(self, deployment: OdooDeployment, template: OdooTemplate,
+                               vps: VPSHost, admin_password: str, **kwargs):
         """Deploy the actual Docker container"""
         try:
             deployment.status = "deploying"
@@ -293,14 +349,27 @@ class OdooDeploymentService:
             # Create container name
             container_name = f"odoo_{deployment.deployment_name.lower().replace('-', '_').replace(' ', '_')}"
             
-            # Prepare environment variables
+            # Get database credentials from deployment form
+            db_host = kwargs.get('db_host', 'localhost')
+            db_port = kwargs.get('db_port', 5432)
+            db_name = kwargs.get('db_name', deployment.db_name)
+            db_user = kwargs.get('db_user', 'postgres')
+            db_password = kwargs.get('db_password')
+
+            # Ensure we have a database password
+            if not db_password:
+                raise Exception("Database password is required for external PostgreSQL connection")
+
+            print(f"Using external PostgreSQL: {db_host}:{db_port}, DB: {db_name}, User: {db_user}")
+
+            # Prepare environment variables for external PostgreSQL
             env_vars = {
-                "POSTGRES_HOST": "postgres",
-                "POSTGRES_PORT": "5432",
-                "POSTGRES_DB": deployment.db_name,
-                "POSTGRES_USER": "odoo",
-                "POSTGRES_PASSWORD": generate_secure_token(16),
-                "ODOO_DB": deployment.db_name,
+                "POSTGRES_HOST": db_host,
+                "POSTGRES_PORT": str(db_port),
+                "POSTGRES_DB": db_name,
+                "POSTGRES_USER": db_user,
+                "POSTGRES_PASSWORD": db_password,
+                "ODOO_DB": db_name,
                 "ODOO_ADMIN_PASSWD": admin_password
             }
             
@@ -322,18 +391,14 @@ class OdooDeploymentService:
                 deployment.progress = 50
                 await self.db.commit()
             
-            # Create Docker run command
+            # Create Docker run command (using external PostgreSQL)
             docker_image = template.docker_image or f"odoo:{deployment.selected_version}"
             env_string = " ".join([f"-e {k}={v}" for k, v in env_vars.items()])
-            
-            docker_cmd = f"""docker run -d \
-                --name {container_name} \
-                --restart unless-stopped \
-                -p {deployment.port}:8069 \
-                {env_string} \
-                --memory={template.default_memory_limit} \
-                --cpus={template.default_cpu_limit} \
-                {docker_image}"""
+
+            # Create single-line Docker command for better SSH execution
+            docker_cmd = f"docker run -d --name {container_name} --restart unless-stopped -p {deployment.port}:8069 {env_string} --memory={template.default_memory_limit} --cpus={template.default_cpu_limit} {docker_image}"
+
+            print(f"Docker command: {docker_cmd}")
             
             deployment.progress = 60
             await self.db.commit()
@@ -351,10 +416,11 @@ class OdooDeploymentService:
             deployment.progress = 80
             await self.db.commit()
             
-            # Restore backup if available
+            # Restore backup if available (for external PostgreSQL)
             if template.backup_file_path:
-                await self._restore_backup(vps.id, container_name, deployment.db_name, 
-                                         remote_backup_path, host_info)
+                await self._restore_backup_external(vps.id, container_name, db_name,
+                                                   remote_backup_path, host_info,
+                                                   db_host, db_port, db_user, db_password)
                 deployment.progress = 90
                 await self.db.commit()
             
@@ -367,7 +433,7 @@ class OdooDeploymentService:
                 odoo_version=deployment.selected_version,
                 industry=template.industry,
                 port=deployment.port,
-                db_name=deployment.db_name,
+                db_name=db_name,  # Use the actual database name from form
                 status="running",
                 env_vars=env_vars,
                 backup_enabled=True,
@@ -439,24 +505,48 @@ class OdooDeploymentService:
         
         raise Exception(f"Container {container_name} not ready within {timeout} seconds")
     
-    async def _restore_backup(self, vps_id: str, container_name: str, db_name: str, 
+    async def _restore_backup(self, vps_id: str, container_name: str, db_name: str,
                              backup_path: str, host_info: dict):
         """Restore database backup to the container"""
         try:
             # Create database in container
             create_db_cmd = f"docker exec {container_name} createdb -U odoo {db_name}"
             result = await self.ssh_service.execute_command(vps_id, create_db_cmd, host_info=host_info)
-            
+
             # Restore backup
             restore_cmd = f"docker exec {container_name} pg_restore -U odoo -d {db_name} {backup_path}"
             result = await self.ssh_service.execute_command(vps_id, restore_cmd, host_info=host_info)
-            
+
             if not result.get("success"):
                 logger.warning(f"Backup restore may have failed: {result.get('stderr', '')}")
-            
+
             logger.info(f"Backup restored for {container_name}")
         except Exception as e:
             logger.error(f"Failed to restore backup: {e}")
+            # Don't fail deployment for backup restore issues
+
+    async def _restore_backup_external(self, vps_id: str, container_name: str, db_name: str,
+                                     backup_path: str, host_info: dict, db_host: str,
+                                     db_port: int, db_user: str, db_password: str):
+        """Restore database backup to external PostgreSQL"""
+        try:
+            # Set PostgreSQL connection environment for the commands
+            pg_env = f"PGPASSWORD='{db_password}'"
+
+            # Create database on external PostgreSQL if it doesn't exist
+            create_db_cmd = f"{pg_env} createdb -h {db_host} -p {db_port} -U {db_user} {db_name} || true"
+            result = await self.ssh_service.execute_command(vps_id, create_db_cmd, host_info=host_info)
+
+            # Restore backup to external PostgreSQL
+            restore_cmd = f"{pg_env} pg_restore -h {db_host} -p {db_port} -U {db_user} -d {db_name} {backup_path}"
+            result = await self.ssh_service.execute_command(vps_id, restore_cmd, host_info=host_info)
+
+            if not result.get("success"):
+                logger.warning(f"External backup restore may have failed: {result.get('stderr', '')}")
+
+            logger.info(f"Backup restored to external PostgreSQL: {db_host}:{db_port}/{db_name}")
+        except Exception as e:
+            logger.error(f"Failed to restore backup to external PostgreSQL: {e}")
             # Don't fail deployment for backup restore issues
     
     async def get_deployments(self, vps_id: Optional[str] = None, status: Optional[str] = None,

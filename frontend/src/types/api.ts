@@ -186,6 +186,12 @@ export interface OdooDeploymentCreate {
   custom_config?: Record<string, any>;
   custom_env_vars?: Record<string, any>;
   admin_password?: string;
+  // Database configuration
+  db_name?: string;
+  db_user?: string;
+  db_password?: string;
+  db_host?: string;
+  db_port?: number;
 }
 
 export interface OdooDeployment {
