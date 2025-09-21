@@ -349,19 +349,27 @@ class OdooDeploymentService:
             # Create container name
             container_name = f"odoo_{deployment.deployment_name.lower().replace('-', '_').replace(' ', '_')}"
             
-            # Get database credentials from deployment form
-            db_host = kwargs.get('db_host', 'localhost')
-            db_port = kwargs.get('db_port', 5432)
+            # Get database credentials (defaults from env)
+            db_host = kwargs.get('db_host', os.getenv('DB_HOST_EXTERNAL', '192.168.50.2'))
+            db_port = kwargs.get('db_port', int(os.getenv('DB_PORT_EXTERNAL', '5433')))
             db_name = kwargs.get('db_name', deployment.db_name)
-            db_user = kwargs.get('db_user', 'postgres')
-            db_password = kwargs.get('db_password')
+            db_user = kwargs.get('db_user', os.getenv('DB_USER', 'odoo_master'))
+            db_password = kwargs.get('db_password', os.getenv('DB_PASSWORD', 'secure_password_123'))
+            print("***********************************Deploying container**************************************************")
+            print("db_host", db_host)
+            print("db_port", db_port)
+            print("db_name", db_name)
+            print("db_user", db_user)
+            print("db_password", db_password)
+            print("&$^&$&*^$*((************%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%******************%%%%%%%%%%%%***#")
+
 
             # Ensure we have a database password
             if not db_password:
                 raise Exception("Database password is required for external PostgreSQL connection")
 
             print(f"Using external PostgreSQL: {db_host}:{db_port}, DB: {db_name}, User: {db_user}")
-
+            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Internal ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
             # Prepare environment variables for external PostgreSQL
             env_vars = {
                 "POSTGRES_HOST": db_host,
@@ -372,7 +380,14 @@ class OdooDeploymentService:
                 "ODOO_DB": db_name,
                 "ODOO_ADMIN_PASSWD": admin_password
             }
-            
+            print("POSTGRES_HOST" in env_vars)
+            print("POSTGRES_PORT" in env_vars)
+            print("POSTGRES_DB" in env_vars)
+            print("POSTGRES_USER" in env_vars)
+            print("POSTGRES_PASSWORD" in env_vars)
+            print("ODOO_DB" in env_vars)
+            print("ODOO_ADMIN_PASSWD" in env_vars)
+            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^External^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
             # Add template environment variables
             if template.env_vars_template:
                 env_vars.update(template.env_vars_template)
