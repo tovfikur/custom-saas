@@ -24,8 +24,8 @@ export default function OdooManagement() {
   const [selectedTemplateForDeploy, setSelectedTemplateForDeploy] = useState<OdooTemplate | null>(null);
 
     const { data: vpsHosts = [] } = useQuery<VPSHost[]>({
-        queryKey: ['vps-hosts'],
-        queryFn: () => vpsApi.list(true).then(r => r.data), // r.data is VPSHost[]
+        queryKey: ['vps-hosts', { activeOnly: true }],
+        queryFn: () => vpsApi.list(true).then(r => r.data),
     });
 
 
@@ -552,16 +552,6 @@ export default function OdooManagement() {
                 >
                   Close
                 </button>
-                <button
-                  onClick={() => {
-                    setShowTemplateDetails(false);
-                    console.log('Deploy template:', selectedTemplate.id);
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <PlayIcon className="h-4 w-4 mr-2" />
-                  Deploy Template
-                </button>
                   <button
                       onClick={() => {
                           setShowTemplateDetails(false);
@@ -611,8 +601,8 @@ export default function OdooManagement() {
                     try {
                         const res = await odooApi.deployOdoo(payload);
                         console.log('Deployment successful:', res.data);
-                        // Refresh deployments list
                         queryClient.invalidateQueries({ queryKey: ['odoo-deployments'] });
+                        queryClient.invalidateQueries({ queryKey: ['vps-hosts'] });
                         setShowDeployModal(false);
                     } catch (error: any) {
                         console.error('Deploy failed:', error.response?.data || error.message);
