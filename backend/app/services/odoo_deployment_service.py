@@ -328,7 +328,7 @@ class OdooDeploymentService:
             deployment.status = "deploying"
             deployment.progress = 10
             await self.db.commit()
-            
+
             # Get VPS connection info
             host_info = {
                 'ip_address': vps.ip_address,
@@ -337,40 +337,39 @@ class OdooDeploymentService:
                 'password_encrypted': vps.password_encrypted,
                 'private_key_encrypted': vps.private_key_encrypted
             }
-            
+
             # Connect to VPS
             ssh_client = await self.ssh_service.get_connection(vps.id, host_info)
             if not ssh_client:
                 raise Exception("Failed to connect to VPS")
-            
+
             deployment.progress = 20
             await self.db.commit()
-            
+
             # Create container name
             container_name = f"odoo_{deployment.deployment_name.lower().replace('-', '_').replace(' ', '_')}"
-            
-            # Get database credentials (defaults from env)
+
+            # Get database credentials from kwargs or use defaults
             db_host = kwargs.get('db_host', os.getenv('DB_HOST_EXTERNAL', '192.168.50.2'))
             db_port = kwargs.get('db_port', int(os.getenv('DB_PORT_EXTERNAL', '5433')))
             db_name = kwargs.get('db_name', deployment.db_name)
             db_user = kwargs.get('db_user', os.getenv('DB_USER', 'odoo_master'))
             db_password = kwargs.get('db_password', os.getenv('DB_PASSWORD', 'secure_password_123'))
-            print("***********************************Deploying container**************************************************")
-            print("db_host", db_host)
-            print("db_port", db_port)
-            print("db_name", db_name)
-            print("db_user", db_user)
-            print("db_password", db_password)
-            print("&$^&$&*^$*((************%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%******************%%%%%%%%%%%%***#")
 
+            # Update deployment object with database credentials for Docker command
+            deployment.db_host = db_host
+            deployment.db_port = db_port
+            deployment.db_user = db_user
+            deployment.db_password = db_password
+            deployment.db_name = db_name
+
+            logger.info(f"Deploying container with DB: {db_host}:{db_port}/{db_name} as {db_user}")
 
             # Ensure we have a database password
             if not db_password:
                 raise Exception("Database password is required for external PostgreSQL connection")
 
-            print(f"Using external PostgreSQL: {db_host}:{db_port}, DB: {db_name}, User: {db_user}")
-            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^Internal ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-            # Prepare environment variables for external PostgreSQL
+            # Prepare base environment variables for Odoo
             env_vars = {
                 "POSTGRES_HOST": db_host,
                 "POSTGRES_PORT": str(db_port),
@@ -380,92 +379,246 @@ class OdooDeploymentService:
                 "ODOO_DB": db_name,
                 "ODOO_ADMIN_PASSWD": admin_password
             }
-            print("POSTGRES_HOST" in env_vars)
-            print("POSTGRES_PORT" in env_vars)
-            print("POSTGRES_DB" in env_vars)
-            print("POSTGRES_USER" in env_vars)
-            print("POSTGRES_PASSWORD" in env_vars)
-            print("ODOO_DB" in env_vars)
-            print("ODOO_ADMIN_PASSWD" in env_vars)
-            print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^External^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+
             # Add template environment variables
             if template.env_vars_template:
                 env_vars.update(template.env_vars_template)
-            
+
             # Add custom environment variables
             if deployment.custom_env_vars:
                 env_vars.update(deployment.custom_env_vars)
-            
+
             deployment.progress = 30
             await self.db.commit()
-            
+
             # Copy backup file to VPS if needed
+            remote_backup_path = None
             if template.backup_file_path and os.path.exists(template.backup_file_path):
                 remote_backup_path = f"/tmp/{deployment.db_name}_backup.zip"
                 await self._copy_backup_to_vps(template.backup_file_path, remote_backup_path, host_info)
                 deployment.progress = 50
                 await self.db.commit()
-            
-            # Create Docker run command (using external PostgreSQL)
+
+            # Create Docker run command using proper Odoo configuration file approach
             docker_image = template.docker_image or f"odoo:{deployment.selected_version}"
-            env_string = " ".join([f"-e {k}={v}" for k, v in env_vars.items()])
+            config_file_path = f"/tmp/odoo_{container_name}.conf"
 
-            # Create single-line Docker command for better SSH execution
-            docker_cmd = f"docker run -d --name {container_name} --restart unless-stopped -p {deployment.port}:8069 {env_string} --memory={template.default_memory_limit} --cpus={template.default_cpu_limit} {docker_image}"
+            # Step 1: Create Odoo configuration file
+            odoo_config = f"""[options]
+db_host = {deployment.db_host}
+db_port = {deployment.db_port}
+db_user = {deployment.db_user}
+db_password = {deployment.db_password}
+xmlrpc_port = {deployment.port}
+xmlrpc_interface = 0.0.0.0
+admin_passwd = {admin_password}
+db_name = {deployment.db_name}
+without_demo = True
+list_db = False
+"""
 
-            print(f"Docker command: {docker_cmd}")
-            
+            # Add template-specific configuration if available
+            if template.config_template:
+                for key, value in template.config_template.items():
+                    if key not in ['db_host', 'db_port', 'db_user', 'db_password', 'xmlrpc_port']:
+                        odoo_config += f"{key} = {value}\n"
+
+            # Step 1 Command: Create configuration file
+            create_config_cmd = f"""cat > {config_file_path} << 'EOF'
+{odoo_config}EOF"""
+
+            # Step 2: Disable firewall if needed (optional, depends on VPS setup)
+            disable_firewall_cmd = "sudo ufw disable 2>/dev/null || true"
+
+            # Step 3: Docker run command with proper configuration
+            docker_cmd = (
+                f"docker run -d "
+                f"--name {container_name} "
+                f"--restart unless-stopped "
+                f"--network host "
+                f"-v {config_file_path}:/etc/odoo/odoo.conf:ro "
+                f"--memory={template.default_memory_limit or '1g'} "
+                f"--cpus={template.default_cpu_limit or '1'} "
+                f"{docker_image}"
+            )
+
+            # Log the complete deployment process
+            print("#########################################")
+            print("ODOO DEPLOYMENT USING CONFIGURATION FILE:")
+            print(f"VPS: {vps.ip_address}:{vps.port}")
+            print(f"Container: {container_name}")
+            print(f"Config File: {config_file_path}")
+            print(f"Database: {db_host}:{db_port}/{db_name}")
+            print(f"Access URL: http://{vps.ip_address}:{deployment.port}/")
+            print("#########################################")
+
+            deployment.progress = 55
+            await self.db.commit()
+
+            # Step 1: Clean up any existing container and config
+            cleanup_commands = [
+                f"docker rm -f {container_name} 2>/dev/null || true",
+                f"rm -f {config_file_path} 2>/dev/null || true"
+            ]
+
+            for cleanup_cmd in cleanup_commands:
+                print("#########################################")
+                print("EXECUTING CLEANUP COMMAND:")
+                print(f"Command: {cleanup_cmd}")
+                print("#########################################")
+
+                cleanup_result = await self.ssh_service.execute_command(vps.id, cleanup_cmd, host_info=host_info)
+
+                print("#########################################")
+                print("CLEANUP RESULT:")
+                print(f"Success: {cleanup_result.get('success', False)}")
+                print(f"STDOUT: {cleanup_result.get('stdout', '')}")
+                print(f"STDERR: {cleanup_result.get('stderr', '')}")
+                print("#########################################")
+
             deployment.progress = 60
             await self.db.commit()
-            
-            # Execute Docker command
-            result = await self.ssh_service.execute_command(vps.id, docker_cmd, host_info=host_info)
-            if not result.get("success"):
-                raise Exception(f"Failed to start container: {result.get('stderr', 'Unknown error')}")
-            
+
+            # Step 2: Create Odoo configuration file
+            print("#########################################")
+            print("CREATING ODOO CONFIGURATION FILE:")
+            print(f"Config File Path: {config_file_path}")
+            print("Configuration Content:")
+            print(odoo_config)
+            print(f"Command: {create_config_cmd}")
+            print("#########################################")
+
+            config_result = await self.ssh_service.execute_command(vps.id, create_config_cmd, host_info=host_info)
+
+            print("#########################################")
+            print("CONFIG FILE CREATION RESULT:")
+            print(f"Success: {config_result.get('success', False)}")
+            print(f"STDOUT: {config_result.get('stdout', '')}")
+            print(f"STDERR: {config_result.get('stderr', '')}")
+            print("#########################################")
+
+            if not config_result.get("success"):
+                raise Exception(f"Failed to create Odoo configuration file: {config_result.get('stderr', 'Unknown error')}")
+
+            deployment.progress = 65
+            await self.db.commit()
+
+            # Step 3: Disable firewall (optional, but helps with connectivity)
+            print("#########################################")
+            print("DISABLING FIREWALL (OPTIONAL):")
+            print(f"Command: {disable_firewall_cmd}")
+            print("#########################################")
+
+            firewall_result = await self.ssh_service.execute_command(vps.id, disable_firewall_cmd, host_info=host_info)
+
+            print("#########################################")
+            print("FIREWALL DISABLE RESULT:")
+            print(f"Success: {firewall_result.get('success', False)}")
+            print(f"STDOUT: {firewall_result.get('stdout', '')}")
+            print(f"STDERR: {firewall_result.get('stderr', '')}")
+            print("#########################################")
+
             deployment.progress = 70
             await self.db.commit()
-            
+
+            # Step 4: Execute Docker command with configuration file
+            print("#########################################")
+            print("EXECUTING MAIN DOCKER DEPLOYMENT COMMAND:")
+            print(f"VPS: {vps.ip_address}:{vps.port}")
+            print(f"Container Name: {container_name}")
+            print(f"Network Mode: host (no port mapping needed)")
+            print(f"Config Volume: {config_file_path}:/etc/odoo/odoo.conf:ro")
+            print(f"Full Command: {docker_cmd}")
+            print("#########################################")
+
+            result = await self.ssh_service.execute_command(vps.id, docker_cmd, host_info=host_info)
+
+            print("#########################################")
+            print("DOCKER DEPLOYMENT COMMAND RESULT:")
+            print(f"Success: {result.get('success', False)}")
+            print(f"STDOUT: {result.get('stdout', '')}")
+            print(f"STDERR: {result.get('stderr', '')}")
+            print(f"Return Code: {result.get('return_code', 'N/A')}")
+            print("#########################################")
+
+            if not result.get("success"):
+                raise Exception(f"Failed to start container: {result.get('stderr', 'Unknown error')}")
+
+            deployment.progress = 75
+            await self.db.commit()
+
             # Wait for container to be ready
+            print("#########################################")
+            print("CHECKING CONTAINER READINESS:")
+            print(f"Container Name: {container_name}")
+            print(f"VPS: {vps.ip_address}:{vps.port}")
+            print("#########################################")
+
             await self._wait_for_container_ready(vps.id, container_name, host_info)
+
+            print("#########################################")
+            print("CONTAINER READINESS CHECK COMPLETED")
+            print(f"Container {container_name} is now ready")
+            print("#########################################")
+
             deployment.progress = 80
             await self.db.commit()
-            
+
             # Restore backup if available (for external PostgreSQL)
-            if template.backup_file_path:
+            if template.backup_file_path and remote_backup_path:
+                print("#########################################")
+                print("STARTING BACKUP RESTORATION:")
+                print(f"Backup File: {remote_backup_path}")
+                print(f"Target Database: {db_host}:{db_port}/{db_name}")
+                print(f"Database User: {db_user}")
+                print("#########################################")
+
                 await self._restore_backup_external(vps.id, container_name, db_name,
                                                    remote_backup_path, host_info,
                                                    db_host, db_port, db_user, db_password)
+
+                print("#########################################")
+                print("BACKUP RESTORATION COMPLETED")
+                print(f"Database {db_name} restored from {remote_backup_path}")
+                print("#########################################")
+
                 deployment.progress = 90
                 await self.db.commit()
-            
-            # Create OdooInstance record
+
+            # Create OdooInstance record with proper configuration
             instance = OdooInstance(
                 vps_id=deployment.vps_id,
                 name=deployment.deployment_name,
-                domain=deployment.domain,
+                domain=f"{vps.ip_address}:{deployment.port}",  # Use VPS IP with assigned port
                 container_name=container_name,
                 odoo_version=deployment.selected_version,
                 industry=template.industry,
                 port=deployment.port,
-                db_name=db_name,  # Use the actual database name from form
+                db_name=db_name,
                 status="running",
-                env_vars=env_vars,
+                env_vars={
+                    "CONFIG_FILE": config_file_path,
+                    "NETWORK_MODE": "host",
+                    "DB_HOST": db_host,
+                    "DB_PORT": str(db_port),
+                    "DB_NAME": db_name,
+                    "ACCESS_URL": f"http://{vps.ip_address}:{deployment.port}/"
+                },
                 backup_enabled=True,
-                ssl_enabled=True
+                ssl_enabled=False  # Using HTTP for now
             )
-            
+
             self.db.add(instance)
             await self.db.commit()
             await self.db.refresh(instance)
-            
+
             # Update deployment
             deployment.instance_id = instance.id
             deployment.status = "completed"
             deployment.progress = 100
             deployment.completed_at = datetime.now(timezone.utc)
             await self.db.commit()
-            
+
             # Log successful deployment
             await self.audit_service.log_action(
                 task_id=generate_secure_token(8),
@@ -480,10 +633,28 @@ class OdooDeploymentService:
                     "instance_id": str(instance.id),
                     "container_name": container_name,
                     "port": deployment.port,
-                    "domain": deployment.domain
+                    "domain": deployment.domain,
+                    "db_host": db_host,
+                    "db_port": db_port,
+                    "db_name": db_name,
+                    "config_file": config_file_path,
+                    "access_url": f"http://{vps.ip_address}:{deployment.port}/"
                 }
             )
-            
+
+            # Final deployment summary
+            print("#########################################")
+            print("🎉 ODOO DEPLOYMENT COMPLETED SUCCESSFULLY!")
+            print(f"📍 VPS: {vps.ip_address}:{vps.port}")
+            print(f"🐳 Container: {container_name}")
+            print(f"📊 Database: {db_host}:{db_port}/{db_name}")
+            print(f"⚙️  Config File: {config_file_path}")
+            print(f"🌐 Access URL: http://{vps.ip_address}:{deployment.port}/")
+            print(f"👤 Admin Password: {admin_password}")
+            print(f"📋 Template: {template.name} (v{deployment.selected_version})")
+            print(f"🏭 Industry: {template.industry}")
+            print("#########################################")
+
         except Exception as e:
             logger.error(f"Container deployment failed: {e}")
             deployment.status = "failed"
@@ -499,25 +670,69 @@ class OdooDeploymentService:
         logger.info(f"Copying backup from {local_path} to {remote_path}")
         # Implementation would depend on your file transfer method
     
-    async def _wait_for_container_ready(self, vps_id: str, container_name: str, host_info: dict, 
+    async def _wait_for_container_ready(self, vps_id: str, container_name: str, host_info: dict,
                                        timeout: int = 300):
         """Wait for container to be ready"""
         start_time = datetime.now()
+        check_count = 0
+
         while (datetime.now() - start_time).seconds < timeout:
+            check_count += 1
+
             # Check if container is running
-            result = await self.ssh_service.execute_command(
-                vps_id, f"docker ps --filter name={container_name} --format json", 
-                host_info=host_info
-            )
-            
+            check_cmd = f"docker ps --filter name={container_name} --format json"
+
+            print("#########################################")
+            print(f"CONTAINER READINESS CHECK #{check_count}:")
+            print(f"Command: {check_cmd}")
+            print("#########################################")
+
+            result = await self.ssh_service.execute_command(vps_id, check_cmd, host_info=host_info)
+
+            print("#########################################")
+            print(f"CONTAINER STATUS CHECK RESULT #{check_count}:")
+            print(f"Success: {result.get('success', False)}")
+            print(f"STDOUT: {result.get('stdout', '')}")
+            print(f"STDERR: {result.get('stderr', '')}")
+            print("#########################################")
+
             if result.get("success") and result.get("stdout"):
-                container_info = json.loads(result["stdout"])
-                if "Up" in container_info.get("Status", ""):
-                    logger.info(f"Container {container_name} is ready")
-                    return
-            
+                try:
+                    container_info = json.loads(result["stdout"])
+                    status = container_info.get("Status", "")
+
+                    print("#########################################")
+                    print(f"CONTAINER STATUS ANALYSIS:")
+                    print(f"Raw Status: {status}")
+                    print(f"Container Running: {'Up' in status}")
+                    print("#########################################")
+
+                    if "Up" in status:
+                        print("#########################################")
+                        print(f"CONTAINER {container_name} IS READY!")
+                        print(f"Final Status: {status}")
+                        print("#########################################")
+                        logger.info(f"Container {container_name} is ready")
+                        return
+                except json.JSONDecodeError as e:
+                    print("#########################################")
+                    print(f"JSON DECODE ERROR: {e}")
+                    print(f"Raw output: {result.get('stdout', '')}")
+                    print("#########################################")
+
+            print("#########################################")
+            print(f"CONTAINER NOT READY YET - WAITING 10 seconds...")
+            print(f"Elapsed time: {(datetime.now() - start_time).seconds} seconds")
+            print(f"Timeout: {timeout} seconds")
+            print("#########################################")
+
             await asyncio.sleep(10)
-        
+
+        print("#########################################")
+        print(f"CONTAINER READINESS TIMEOUT!")
+        print(f"Container {container_name} not ready within {timeout} seconds")
+        print("#########################################")
+
         raise Exception(f"Container {container_name} not ready within {timeout} seconds")
     
     async def _restore_backup(self, vps_id: str, container_name: str, db_name: str,
@@ -550,17 +765,61 @@ class OdooDeploymentService:
 
             # Create database on external PostgreSQL if it doesn't exist
             create_db_cmd = f"{pg_env} createdb -h {db_host} -p {db_port} -U {db_user} {db_name} || true"
+
+            print("#########################################")
+            print("CREATING DATABASE ON EXTERNAL POSTGRESQL:")
+            print(f"Host: {db_host}:{db_port}")
+            print(f"Database: {db_name}")
+            print(f"User: {db_user}")
+            print(f"Command: {create_db_cmd}")
+            print("#########################################")
+
             result = await self.ssh_service.execute_command(vps_id, create_db_cmd, host_info=host_info)
+
+            print("#########################################")
+            print("DATABASE CREATION RESULT:")
+            print(f"Success: {result.get('success', False)}")
+            print(f"STDOUT: {result.get('stdout', '')}")
+            print(f"STDERR: {result.get('stderr', '')}")
+            print("#########################################")
 
             # Restore backup to external PostgreSQL
             restore_cmd = f"{pg_env} pg_restore -h {db_host} -p {db_port} -U {db_user} -d {db_name} {backup_path}"
+
+            print("#########################################")
+            print("RESTORING BACKUP TO EXTERNAL POSTGRESQL:")
+            print(f"Backup File: {backup_path}")
+            print(f"Target: {db_host}:{db_port}/{db_name}")
+            print(f"Command: {restore_cmd}")
+            print("#########################################")
+
             result = await self.ssh_service.execute_command(vps_id, restore_cmd, host_info=host_info)
+
+            print("#########################################")
+            print("BACKUP RESTORATION RESULT:")
+            print(f"Success: {result.get('success', False)}")
+            print(f"STDOUT: {result.get('stdout', '')}")
+            print(f"STDERR: {result.get('stderr', '')}")
+            print("#########################################")
 
             if not result.get("success"):
                 logger.warning(f"External backup restore may have failed: {result.get('stderr', '')}")
+                print("#########################################")
+                print("WARNING: BACKUP RESTORATION MAY HAVE FAILED")
+                print(f"Error: {result.get('stderr', '')}")
+                print("#########################################")
+            else:
+                print("#########################################")
+                print("BACKUP RESTORATION SUCCESSFUL!")
+                print(f"Database {db_name} restored successfully")
+                print("#########################################")
 
             logger.info(f"Backup restored to external PostgreSQL: {db_host}:{db_port}/{db_name}")
         except Exception as e:
+            print("#########################################")
+            print("BACKUP RESTORATION ERROR:")
+            print(f"Exception: {str(e)}")
+            print("#########################################")
             logger.error(f"Failed to restore backup to external PostgreSQL: {e}")
             # Don't fail deployment for backup restore issues
     
