@@ -1,4 +1,5 @@
 # app/api/v1/deployments.py
+import os
 from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime, timezone
 
@@ -124,10 +125,10 @@ class DeployOdooRequest(BaseModel):
     admin_password: Optional[str] = None  # optional override
     # Database configuration
     db_name: Optional[str] = None
-    db_user: Optional[str] = None
-    db_password: Optional[str] = None
-    db_host: Optional[str] = "localhost"
-    db_port: Optional[int] = 5432
+    db_user: Optional[str] = os.getenv("DB_USER", "odoo_master")
+    db_password: Optional[str] = os.getenv("DB_PASSWORD", "secure_password_123")
+    db_host: Optional[str] = os.getenv("DB_HOST_EXTERNAL", "192.168.50.2")
+    db_port: Optional[int] = int(os.getenv("DB_PORT_EXTERNAL", "5433"))
 
 class DeployOdooResponse(BaseModel):
     success: bool
