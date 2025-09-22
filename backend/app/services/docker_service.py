@@ -187,6 +187,17 @@ class DockerService:
                                     if '=' in pair:
                                         key, value = pair.split('=', 1)
                                         labels[key.strip()] = value.strip()
+
+                            # If ports missing but custom label present, synthesize from label
+                            if not ports:
+                                labeled_port = labels.get("saas.port")
+                                if labeled_port:
+                                    lp = str(labeled_port).strip()
+                                    if lp:
+                                        ports = [
+                                            f"0.0.0.0:{lp}->{lp}/tcp",
+                                            f":::{lp}->{lp}/tcp",
+                                        ]
                             
                             containers.append({
                                 "id": container_data.get("ID", "")[:12],
@@ -200,7 +211,68 @@ class DockerService:
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse container JSON: {e}")
             
-            
+            # Fallback: enrich ports using docker inspect for containers with missing ports
+            try:
+                ids_missing_ports = [c["id"] for c in containers if not c.get("ports")]
+                if ids_missing_ports:
+                    # Use full-length IDs to inspect; map 12-char prefix later
+                    # Fetch inspect data for all containers to minimize calls
+                    inspect_cmd = "docker inspect $(docker ps -aq)"
+                    inspect_result = await self.ssh_service.execute_command(vps.id, inspect_cmd, host_info=host_info)
+                    if inspect_result.get("success") and inspect_result.get("stdout"):
+                        try:
+                            inspect_data = json.loads(inspect_result["stdout"])  # list of dicts
+                            # Build map from 12-char id prefix to derived port strings
+                            ports_by_id: Dict[str, List[str]] = {}
+                            for item in inspect_data:
+                                full_id = item.get("Id", "")
+                                short_id = full_id[:12]
+                                ports_list: List[str] = []
+
+                                # First try NetworkSettings.Ports
+                                net_ports = (item.get("NetworkSettings") or {}).get("Ports")
+                                if isinstance(net_ports, dict):
+                                    for container_port, bindings in net_ports.items():
+                                        # bindings can be None for host network or no mapping
+                                        if isinstance(bindings, list):
+                                            for b in bindings:
+                                                host_ip = (b.get("HostIp") or "0.0.0.0").strip()
+                                                host_port = (b.get("HostPort") or "").strip()
+                                                if host_port:
+                                                    ip_disp = (
+                                                        f":::{host_port}" if host_ip in ("::", "0:0:0:0:0:0:0:0")
+                                                        else f"{host_ip}:{host_port}"
+                                                    )
+                                                    ports_list.append(f"{ip_disp}->{container_port}")
+
+                                # If still empty, attempt to infer for host network using ExposedPorts
+                                if not ports_list:
+                                    network_mode = (item.get("HostConfig") or {}).get("NetworkMode")
+                                    exposed = (item.get("Config") or {}).get("ExposedPorts")
+                                    if network_mode == "host" and isinstance(exposed, dict):
+                                        # In host mode, synthesize mappings for display (IPv4 and IPv6)
+                                        for container_port in exposed.keys():
+                                            try:
+                                                port_num = str(container_port).split("/")[0]
+                                            except Exception:
+                                                port_num = None
+                                            if port_num:
+                                                ports_list.append(f"0.0.0.0:{port_num}->{container_port}")
+                                                ports_list.append(f":::{port_num}->{container_port}")
+
+                                if ports_list:
+                                    ports_by_id[short_id] = ports_list
+
+                            # Apply enrichment
+                            for c in containers:
+                                if not c.get("ports") and c["id"] in ports_by_id:
+                                    c["ports"] = ports_by_id[c["id"]]
+                        except json.JSONDecodeError:
+                            # ignore if inspect output is not JSON (shouldn't happen)
+                            pass
+            except Exception as e:
+                logger.warning(f"Failed to enrich container ports via inspect: {e}")
+
             return {
                 "success": True,
                 "containers": containers
