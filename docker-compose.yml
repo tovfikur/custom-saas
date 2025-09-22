@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -19,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - "6381:6379"
     networks:
       - saas_network
 
@@ -30,7 +30,7 @@ services:
       dockerfile: Dockerfile
     user: "1000:1000"
     ports:
-      - "8000:8000"
+      - "8004:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/saas_orchestrator
       REDIS_URL: redis://redis:6379
@@ -111,9 +111,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3002:3000"
     environment:
-      VITE_API_URL: http://192.168.50.152:8000
+      VITE_API_URL: https://odoo-bangladesh.com
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -125,7 +125,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "9091:9090"
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -142,7 +142,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3001:3000"
+      - "3003:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource

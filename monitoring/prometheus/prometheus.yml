@@ -22,7 +22,7 @@ scrape_configs:
   # SaaS Orchestrator API
   - job_name: "saas-api"
     static_configs:
-      - targets: ["backend:8001"] # Prometheus metrics endpoint
+      - targets: ["backend:8000"] # Prometheus metrics endpoint
     metrics_path: "/metrics"
     scrape_interval: 30s
 
