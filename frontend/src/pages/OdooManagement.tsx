@@ -599,15 +599,15 @@ export default function OdooManagement() {
                     };
 
                     try {
-                        const res = await odooApi.deployOdoo(payload);
-                        console.log('Deployment successful:', res.data);
-                        queryClient.invalidateQueries({ queryKey: ['odoo-deployments'] });
-                        queryClient.invalidateQueries({ queryKey: ['vps-hosts'] });
-                        setShowDeployModal(false);
+                      const res = await odooApi.deployOdoo(payload);
+                      console.log('Deployment successful:', res.data);
+                      queryClient.invalidateQueries({ queryKey: ['odoo-deployments'] });
+                      queryClient.invalidateQueries({ queryKey: ['vps-hosts'] });
+                      setShowDeployModal(false);
                     } catch (error: any) {
-                        console.error('Deploy failed:', error.response?.data || error.message);
-                        // show your toast/alert here
-                        return;
+                      console.error('Deploy failed:', error?.response?.data || error?.message || error);
+                      // Propagate error so modal can stop progress and keep the form open
+                      throw error;
                     }
                 }}
             />
