@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dockerApi } from '@/services/dockerApi';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -22,6 +22,8 @@ interface ContainerListProps {
 
 export default function ContainerList({ vpsId, onOpenTerminal }: ContainerListProps) {
   const [showAllContainers, setShowAllContainers] = useState(false);
+  const [selectedContainers, setSelectedContainers] = useState<Set<string>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
   const queryClient = useQueryClient();
 
   const { data: containersData, isLoading, error, refetch } = useQuery({
@@ -43,6 +45,50 @@ export default function ContainerList({ vpsId, onOpenTerminal }: ContainerListPr
       toast.error(message);
     },
   });
+
+  const batchRemoveMutation = useMutation({
+    mutationFn: async (containerIds: string[]) => {
+      const results = await Promise.allSettled(
+        containerIds.map((id) => dockerApi.containerAction(vpsId, id, 'remove'))
+      );
+      return results;
+    },
+    onSuccess: (results) => {
+      const successes = results.filter((r) => r.status === 'fulfilled').length;
+      const failures = results.filter((r) => r.status === 'rejected').length;
+      if (successes > 0) {
+        toast.success(`Removed ${successes} container${successes !== 1 ? 's' : ''}`);
+      }
+      if (failures > 0) {
+        toast.error(`Failed to remove ${failures} container${failures !== 1 ? 's' : ''}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['docker-containers', vpsId] });
+      queryClient.invalidateQueries({ queryKey: ['docker-status', vpsId] });
+      setSelectedContainers(new Set());
+    },
+    onError: () => {
+      // Fallback (shouldn't hit with allSettled), but keep UX safe
+      toast.error('Batch removal failed');
+    },
+  });
+
+  // Ensure hooks are always called before any conditional return
+  const containers = Array.isArray(containersData?.data?.containers)
+    ? containersData.data.containers
+    : [];
+
+  // Keep select-all checkbox in indeterminate state when partially selected
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    const allIds = containers.map((c) => c.id);
+    const selectedCount = allIds.filter((id) => selectedContainers.has(id)).length;
+    selectAllRef.current.indeterminate = selectedCount > 0 && selectedCount < allIds.length;
+  }, [containers, selectedContainers]);
+
+  // Clear selection when toggling view mode (running/all)
+  useEffect(() => {
+    setSelectedContainers(new Set());
+  }, [showAllContainers]);
 
   if (isLoading) {
     return (
@@ -75,7 +121,35 @@ export default function ContainerList({ vpsId, onOpenTerminal }: ContainerListPr
     );
   }
 
-  const containers = containersData.data.containers || [];
+  const allVisibleSelected = containers.length > 0 && containers.every((c) => selectedContainers.has(c.id));
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    if (checked) {
+      setSelectedContainers(new Set(containers.map((c) => c.id)));
+    } else {
+      const next = new Set(selectedContainers);
+      containers.forEach((c) => next.delete(c.id));
+      setSelectedContainers(next);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedContainers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchRemove = () => {
+    const ids = Array.from(selectedContainers).filter((id) => containers.find((c) => c.id === id));
+    if (ids.length === 0) return;
+    if (!confirm(`Remove ${ids.length} selected container${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) {
+      return;
+    }
+    batchRemoveMutation.mutate(ids);
+  };
 
   const getStatusIcon = (status: string) => {
     const statusLower = status.toLowerCase();
@@ -130,6 +204,18 @@ export default function ContainerList({ vpsId, onOpenTerminal }: ContainerListPr
         </div>
         
         <div className="flex items-center space-x-3">
+          {/* Select all visible */}
+          <label className="flex items-center">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="ml-2 text-sm text-gray-700">Select all</span>
+          </label>
+
           <label className="flex items-center">
             <input
               type="checkbox"
@@ -140,6 +226,23 @@ export default function ContainerList({ vpsId, onOpenTerminal }: ContainerListPr
             <span className="ml-2 text-sm text-gray-700">Show all containers</span>
           </label>
           
+          {/* Batch remove */}
+          <button
+            onClick={handleBatchRemove}
+            className="btn-danger"
+            disabled={selectedContainers.size === 0 || batchRemoveMutation.isPending}
+            title={selectedContainers.size === 0 ? 'Select containers to remove' : 'Remove selected'}
+          >
+            {batchRemoveMutation.isPending ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <>
+                <TrashIcon className="h-4 w-4 mr-2" />
+                Remove Selected ({selectedContainers.size})
+              </>
+            )}
+          </button>
+
           <button
             onClick={() => refetch()}
             className="btn-secondary"
@@ -171,6 +274,13 @@ export default function ContainerList({ vpsId, onOpenTerminal }: ContainerListPr
               <li key={container.id} className="px-6 py-4 hover:bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4 flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedContainers.has(container.id)}
+                      onChange={() => toggleSelect(container.id)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      title={`Select ${container.name}`}
+                    />
                     {getStatusIcon(container.status)}
                     
                     <div className="flex-1 min-w-0">
