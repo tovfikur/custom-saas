@@ -65,7 +65,7 @@ export default function VPSTerminal({ vpsId }: VPSTerminalProps) {
 
   const connectWebSocket = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiHost = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL).host : 'localhost:8000';
+    const apiHost = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL).host : 'odoo-bangladesh.com';
     const wsUrl = `${protocol}//${apiHost}/api/v1/vps/${vpsId}/terminal`;
     
     websocket.current = new WebSocket(wsUrl);

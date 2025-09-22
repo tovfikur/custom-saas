@@ -1,0 +1,5 @@
+// odoo-bangladesh.com zone
+zone "odoo-bangladesh.com" {
+    type master;
+    file "/etc/bind/zones/db.odoo-bangladesh.com";
+};
