@@ -350,11 +350,13 @@ class OdooDeploymentService:
             container_name = f"odoo_{deployment.deployment_name.lower().replace('-', '_').replace(' ', '_')}"
 
             # Get database credentials from kwargs or use defaults
-            db_host = kwargs.get('db_host', os.getenv('DB_HOST_EXTERNAL', '192.168.50.2'))
-            db_port = kwargs.get('db_port', int(os.getenv('DB_PORT_EXTERNAL', '5433')))
+            print(f"DEBUG: kwargs received: {kwargs}")
+            db_host = kwargs.get('db_host')
+            db_port = kwargs.get('db_port')
             db_name = kwargs.get('db_name', deployment.db_name)
-            db_user = kwargs.get('db_user', os.getenv('DB_USER', 'odoo_master'))
-            db_password = kwargs.get('db_password', os.getenv('DB_PASSWORD', 'secure_password_123'))
+            db_user = kwargs.get('db_user')
+            db_password = kwargs.get('db_password')
+            print(f"DEBUG: Parsed DB values - host:{db_host}, port:{db_port}, user:{db_user}, name:{db_name}")
 
             # Update deployment object with database credentials for Docker command
             deployment.db_host = db_host
