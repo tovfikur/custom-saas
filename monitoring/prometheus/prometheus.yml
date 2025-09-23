@@ -7,11 +7,11 @@ global:
 rule_files:
   - "rules/*.yml"
 
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets:
-            - alertmanager:9093
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
 
 scrape_configs:
   # Prometheus itself

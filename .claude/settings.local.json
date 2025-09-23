@@ -51,7 +51,22 @@
       "Read(//etc/nginx/**)",
       "Bash(./update-nginx-config.sh:*)",
       "Read(//var/**)",
-      "Read(//etc/**)"
+      "Read(//etc/**)",
+      "Bash(ufw:*)",
+      "Bash(iptables:*)",
+      "Bash(ip route:*)",
+      "Bash(ip addr:*)",
+      "Bash(ss:*)",
+      "Bash(traceroute:*)",
+      "Bash(apt:*)",
+      "Bash(apt install:*)",
+      "Bash(snap install:*)",
+      "Bash(ln:*)",
+      "Bash(nginx:*)",
+      "Bash(systemctl start:*)",
+      "Bash(systemctl:*)",
+      "Bash(certbot:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
