@@ -1,14 +1,15 @@
 import { ReactNode, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Disclosure, Menu, Transition } from '@headlessui/react';
-import { 
-  Bars3Icon, 
+import {
+  Bars3Icon,
   XMarkIcon,
   HomeIcon,
   ServerIcon,
   ChartBarIcon,
   UserCircleIcon,
-  BuildingOfficeIcon
+  BuildingOfficeIcon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 import { AdminProfile } from '@/types/api';
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'VPS Management', href: '/vps', icon: ServerIcon },
   { name: 'Odoo Management', href: '/odoo', icon: BuildingOfficeIcon },
+  { name: 'Module Management', href: '/modules', icon: CubeIcon },
   { name: 'Monitoring', href: '/monitoring', icon: ChartBarIcon },
 ];
 

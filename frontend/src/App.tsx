@@ -9,6 +9,7 @@ import VPSDashboard from '@/pages/VPSDashboard';
 import NginxConfigEditor from '@/pages/NginxConfigEditor';
 import MonitoringPage from '@/pages/MonitoringPage';
 import OdooManagement from '@/pages/OdooManagement';
+import ModuleManagement from '@/pages/ModuleManagement';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
         <Route path="/vps/:vpsId" element={<VPSDashboard />} />
         <Route path="/vps/:vpsId/nginx" element={<NginxConfigEditor />} />
         <Route path="/odoo" element={<OdooManagement />} />
+        <Route path="/modules" element={<ModuleManagement />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

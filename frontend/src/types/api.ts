@@ -219,6 +219,31 @@ export interface OdooDeployment {
   vps_name?: string;
 }
 
+// Module Management
+export interface Module {
+  id: string;
+  name: string;
+  category: string;
+  version: string;
+  description?: string;
+  file_type?: string;
+  file_size_mb: number;
+  download_count?: number;
+  is_active: boolean;
+  tags?: string[];
+  created_at: string;
+  updated_at: string;
+  uploaded_by?: string;
+}
+
+export interface ModuleCreate {
+  name: string;
+  category: string;
+  version: string;
+  description?: string;
+  tags?: string;
+}
+
 // Monitoring
 export interface SystemMetrics {
   active_vps_hosts: number;

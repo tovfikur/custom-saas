@@ -51,15 +51,15 @@ api.interceptors.response.use(
       localStorage.removeItem('auth_token');
       window.location.href = '/login';
     }
-    
+
     const errorMessage = error.response?.data?.error || error.message || 'An error occurred';
     console.error('API Error:', error);
-    
+
     // Show toast for non-auth errors
     if (error.response?.status !== 401) {
       toast.error(errorMessage);
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -170,6 +170,7 @@ export const odooApi = {
   deployOdoo: (data: OdooDeploymentCreate): Promise<AxiosResponse<OdooDeployment>> =>
     api.post('/odoo/deployments', data),
 };
+
 
 // Generic API wrapper
 export const apiClient = {
