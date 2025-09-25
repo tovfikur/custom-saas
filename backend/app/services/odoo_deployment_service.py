@@ -248,8 +248,9 @@ class OdooDeploymentService:
                        
             
             
-            # Generate database name and admin password
-            db_name = f"{deployment_name.lower().replace('-', '_').replace(' ', '_')}"
+            # Generate unique database name and admin password
+            unique_suffix = str(uuid.uuid4())[:8]
+            db_name = f"odoo_{deployment_name.lower().replace('-', '_').replace(' ', '_')}_{unique_suffix}"
             admin_password = kwargs.get('admin_password') or generate_secure_token(16)
 
             # Ensure admin_password is a string
@@ -393,6 +394,12 @@ class OdooDeploymentService:
             deployment.progress = 30
             await self.db.commit()
 
+            # Create unique database on PostgreSQL server
+            await self._create_database(vps.id, host_info, db_host, db_port, db_user, db_password, db_name)
+
+            deployment.progress = 40
+            await self.db.commit()
+
             # Copy backup file to VPS if needed
             remote_backup_path = None
             if template.backup_file_path and os.path.exists(template.backup_file_path):
@@ -417,6 +424,14 @@ admin_passwd = {admin_password}
 db_name = {deployment.db_name}
 without_demo = True
 list_db = False
+addons_path = /usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons
+db_maxconn = 64
+db_template = template0
+limit_memory_soft = 2147483648
+limit_memory_hard = 2684354560
+limit_time_cpu = 600
+limit_time_real = 1200
+limit_time_real_cron = 1200
 """
 
             # Add template-specific configuration if available
@@ -443,9 +458,10 @@ list_db = False
                 f"--label saas.port={deployment.port} "
                 f"--label saas.domain={deployment.domain} "
                 f"-v {config_file_path}:/etc/odoo/odoo.conf:ro "
+                f"-v /opt/odoo-extra-addons:/mnt/extra-addons:ro "
                 f"--memory={template.default_memory_limit or '1g'} "
                 f"--cpus={template.default_cpu_limit or '1'} "
-                f"{docker_image}"
+                f"{docker_image} -- --init=base --without-demo=all"
             )
 
             # Log the complete deployment process
@@ -669,6 +685,93 @@ list_db = False
             await self.db.commit()
             raise
     
+    async def _create_database(self, vps_id: str, host_info: dict, db_host: str,
+                              db_port: int, db_user: str, db_password: str, db_name: str):
+        """Create a new database on PostgreSQL server"""
+        try:
+            # Set PostgreSQL connection environment
+            pg_env = f"PGPASSWORD='{db_password}'"
+
+            # Create database command with proper template and encoding
+            create_db_cmd = f"{pg_env} createdb -h {db_host} -p {db_port} -U {db_user} -T template0 -E UTF8 --locale=C --lc-collate=C --lc-ctype=C {db_name}"
+
+            print("#########################################")
+            print("CREATING UNIQUE DATABASE:")
+            print(f"Database Host: {db_host}:{db_port}")
+            print(f"Database Name: {db_name}")
+            print(f"Database User: {db_user}")
+            print(f"Command: createdb -h {db_host} -p {db_port} -U {db_user} {db_name}")
+            print("#########################################")
+
+            result = await self.ssh_service.execute_command(vps_id, create_db_cmd, host_info=host_info)
+
+            print("#########################################")
+            print("DATABASE CREATION RESULT:")
+            print(f"Success: {result.get('success', False)}")
+            print(f"STDOUT: {result.get('stdout', '')}")
+            print(f"STDERR: {result.get('stderr', '')}")
+            print("#########################################")
+
+            if not result.get("success"):
+                error_msg = result.get('stderr', 'Unknown error')
+                # Check if database already exists (not a fatal error)
+                if "already exists" in error_msg.lower():
+                    print(f"Database {db_name} already exists - continuing")
+                else:
+                    raise Exception(f"Failed to create database {db_name}: {error_msg}")
+            else:
+                print(f"Database {db_name} created successfully!")
+
+            # Configure database settings for Odoo compatibility
+            await self._configure_database_settings(vps_id, host_info, db_host, db_port, db_user, db_password, db_name)
+
+            logger.info(f"Database {db_name} ready for Odoo deployment")
+
+        except Exception as e:
+            logger.error(f"Failed to create database {db_name}: {e}")
+            raise
+
+    async def _configure_database_settings(self, vps_id: str, host_info: dict, db_host: str,
+                                          db_port: int, db_user: str, db_password: str, db_name: str):
+        """Configure database settings for better Odoo compatibility"""
+        try:
+            # Set PostgreSQL connection environment
+            pg_env = f"PGPASSWORD='{db_password}'"
+
+            # SQL commands to optimize database for Odoo
+            sql_commands = [
+                f"ALTER DATABASE {db_name} SET lock_timeout = '30s';",
+                f"ALTER DATABASE {db_name} SET statement_timeout = '300s';",
+                f"ALTER DATABASE {db_name} SET idle_in_transaction_session_timeout = '600s';",
+                f"ALTER DATABASE {db_name} SET log_lock_waits = on;",
+                f"ALTER DATABASE {db_name} SET deadlock_timeout = '1s';"
+            ]
+
+            print("#########################################")
+            print("CONFIGURING DATABASE SETTINGS FOR ODOO:")
+            print(f"Database: {db_name}")
+            print("Setting lock_timeout, statement_timeout, and other parameters")
+            print("#########################################")
+
+            for sql_cmd in sql_commands:
+                # Execute SQL command via psql
+                psql_cmd = f"{pg_env} psql -h {db_host} -p {db_port} -U {db_user} -d {db_name} -c \"{sql_cmd}\""
+
+                result = await self.ssh_service.execute_command(vps_id, psql_cmd, host_info=host_info)
+
+                if result.get("success"):
+                    print(f"✓ Executed: {sql_cmd}")
+                else:
+                    print(f"⚠ Failed: {sql_cmd} - {result.get('stderr', '')}")
+
+            print("#########################################")
+            print("DATABASE CONFIGURATION COMPLETED")
+            print("#########################################")
+
+        except Exception as e:
+            logger.warning(f"Failed to configure database settings for {db_name}: {e}")
+            # Don't fail the deployment for configuration issues
+
     async def _copy_backup_to_vps(self, local_path: str, remote_path: str, host_info: dict):
         """Copy backup file from local storage to VPS"""
         # This would use SCP or SFTP to copy the file

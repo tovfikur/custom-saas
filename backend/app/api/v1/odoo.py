@@ -536,10 +536,11 @@ async def simple_deploy_odoo(
         if not vps:
             raise HTTPException(status_code=404, detail="VPS not found")
 
-        # Generate deployment details
+        # Generate deployment details with unique database
         deployment_name = f"odoo_{generate_secure_token(8)}"
         container_name = f"odoo_{deployment_name}"
         admin_password = generate_secure_token(16)
+        unique_db_name = f"odoo_{deployment_name}_{generate_secure_token(4)}"
 
         # VPS connection info
         host_info = {
@@ -581,8 +582,33 @@ async def simple_deploy_odoo(
         if not (8001 <= port <= 8100):
             raise Exception(f"Port {port} is outside expected range 8001-8100")
 
-        # Create Docker run command (single line to avoid SSH issues)
-        docker_cmd = f"docker run -d --name {container_name} --restart unless-stopped -p {port}:8069 -e POSTGRES_HOST={request.db_host} -e POSTGRES_PORT={request.db_port} -e POSTGRES_DB={request.db_name} -e POSTGRES_USER={request.db_user} -e POSTGRES_PASSWORD={request.db_password} -e ODOO_DB={request.db_name} -e ODOO_ADMIN_PASSWD={admin_password} --memory=2g --cpus=1 odoo:{request.version}"
+        # Create unique database first with proper template and encoding
+        pg_env = f"PGPASSWORD='{request.db_password}'"
+        create_db_cmd = f"{pg_env} createdb -h {request.db_host} -p {request.db_port} -U {request.db_user} -T template0 -E UTF8 --locale=C --lc-collate=C --lc-ctype=C {unique_db_name}"
+
+        print(f"Creating unique database: {unique_db_name}")
+        db_result = await ssh_service.execute_command(request.vps_id, create_db_cmd, host_info=host_info)
+
+        if not db_result.get("success"):
+            error_msg = db_result.get('stderr', 'Unknown error')
+            if "already exists" not in error_msg.lower():
+                raise Exception(f"Failed to create database {unique_db_name}: {error_msg}")
+
+        # Configure database settings for Odoo compatibility
+        db_config_commands = [
+            f"{pg_env} psql -h {request.db_host} -p {request.db_port} -U {request.db_user} -d {unique_db_name} -c \"ALTER DATABASE {unique_db_name} SET lock_timeout = '30s';\"",
+            f"{pg_env} psql -h {request.db_host} -p {request.db_port} -U {request.db_user} -d {unique_db_name} -c \"ALTER DATABASE {unique_db_name} SET statement_timeout = '300s';\""
+        ]
+
+        for config_cmd in db_config_commands:
+            config_result = await ssh_service.execute_command(request.vps_id, config_cmd, host_info=host_info)
+            if config_result.get("success"):
+                print(f"✓ Database configuration applied")
+            else:
+                print(f"⚠ Database configuration warning: {config_result.get('stderr', '')}")
+
+        # Create Docker run command (single line to avoid SSH issues) with database initialization
+        docker_cmd = f"docker run -d --name {container_name} --restart unless-stopped -p {port}:8069 -e POSTGRES_HOST={request.db_host} -e POSTGRES_PORT={request.db_port} -e POSTGRES_DB={unique_db_name} -e POSTGRES_USER={request.db_user} -e POSTGRES_PASSWORD={request.db_password} -e ODOO_DB={unique_db_name} -e ODOO_ADMIN_PASSWD={admin_password} --memory=2g --cpus=1 odoo:{request.version} -- --init=base --without-demo=all"
 
         print(f"Executing Docker command: {docker_cmd}")
         print(f"Port mapping: {port}:8069")
@@ -608,7 +634,7 @@ async def simple_deploy_odoo(
             "database": {
                 "host": request.db_host,
                 "port": request.db_port,
-                "name": request.db_name,
+                "name": unique_db_name,
                 "user": request.db_user
             }
         }
